@@ -24,3 +24,8 @@
     RewriteRule ^ index.php [L]
 </IfModule>
 
+# Laravel sends X-Robots-Tag on every response it builds. Files that Apache
+# serves without Laravel (the theme, uploaded images, robots.txt) get it here.
+<IfModule mod_headers.c>
+    Header set X-Robots-Tag "noindex, nofollow"
+</IfModule>

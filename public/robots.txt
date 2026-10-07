@@ -1,0 +1,4 @@
+# This host runs the blog admin and its API. Readers find the posts at
+# https://konstelasi.co.id/blog/
+User-agent: *
+Disallow: /
