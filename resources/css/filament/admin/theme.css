@@ -1,0 +1,44 @@
+/* The admin theme. It follows the tokens in the site's src/styles/tokens.css
+   (Poppins, neutral greys, one violet hue), so the admin reads as part of
+   konstelasi.co.id. The colour scales themselves are set in
+   AdminPanelProvider, because Filament writes them into the page. */
+
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+/* Poppins, self-hosted. Only the Latin subsets, which cover English and
+   Indonesian, in the weights Filament uses. */
+@import '@fontsource/poppins/latin-400.css';
+@import '@fontsource/poppins/latin-ext-400.css';
+@import '@fontsource/poppins/latin-500.css';
+@import '@fontsource/poppins/latin-ext-500.css';
+@import '@fontsource/poppins/latin-600.css';
+@import '@fontsource/poppins/latin-ext-600.css';
+@import '@fontsource/poppins/latin-700.css';
+@import '@fontsource/poppins/latin-ext-700.css';
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+
+/* Dark mode draws focus rings, checked boxes and the selected-row bar from
+   shade 500. The site's dark `--brand` is shade 400 (#b39ddb), so 500 points
+   there. Shade 500 of the greys becomes the dark `--text-faint` (#8a8a8a),
+   because the light value would fall below 4.5:1 on dark panels.
+   `html.dark` outranks the `:root` block Filament writes into the page. */
+html.dark {
+    --primary-500: var(--primary-400);
+    --gray-500: #8a8a8a;
+}
+
+/* With shade 500 now light, a white tick would barely show on a checked box
+   in dark mode, so the tick and the radio dot turn dark instead. */
+html.dark input[type='checkbox'].fi-checkbox-input:checked {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 16 16' fill='%23090909' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0z'/%3E%3C/svg%3E");
+}
+
+html.dark input[type='checkbox'].fi-checkbox-input:indeterminate {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 16 16' fill='%23090909' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.5 6.75a1.25 1.25 0 0 0 0 2.5h7a1.25 1.25 0 0 0 0-2.5h-7z'/%3E%3C/svg%3E");
+}
+
+html.dark input[type='radio'].fi-radio-input:checked {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 16 16' fill='%23090909' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3C/svg%3E");
+}
