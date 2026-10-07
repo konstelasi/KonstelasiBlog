@@ -1,0 +1,13 @@
+# LF everywhere, whatever core.autocrlf says. deploy.sh runs on the Linux
+# host and breaks with CRLF line endings.
+* text=auto eol=lf
+
+*.blade.php diff=html
+*.css diff=css
+*.html diff=html
+*.md diff=markdown
+*.php diff=php
+
+/.github export-ignore
+CHANGELOG.md export-ignore
+.styleci.yml export-ignore
