@@ -63,7 +63,9 @@ The slug comes from the English title and becomes the post's address, `konstelas
 
 The admin checks the house writing style as you save. It rejects an em dash or an en dash in any field, a hyphen with a space on each side standing in for one, and a colon or semicolon in a title or a Markdown heading.
 
-To put a post on the site, set its status to Published and save, then run `bash deploy.sh` in the parent repo. The site's build fetches `/api/posts` and turns each post into a page in both languages.
+To put a post on the site, set its status to Published and save. The public pages are static files, so the site has to be rebuilt, and saving does that: this app asks GitHub to run the website's Deploy workflow, whose build fetches `/api/posts` and turns each post into a page in both languages. The change is live about two or three minutes later. Editing a draft starts nothing.
+
+That needs `GITHUB_DISPATCH_TOKEN` in the host's `.env`, a fine-grained GitHub token with only the Actions read and write permission on the website repository (`GITHUB_DISPATCH_REPO` in `.env.example`). Without it saving still works, and the site only changes when someone runs `bash deploy.sh` in the parent repo or runs the workflow by hand in the Actions tab. If the request fails, the failure is written to the log and the save is not affected.
 
 ## The API
 

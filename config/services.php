@@ -28,6 +28,15 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // Where a change to a published post sends the "rebuild the site" request.
+    // With no token nothing is sent, which is the case locally and in tests.
+    'github' => [
+        'token' => env('GITHUB_DISPATCH_TOKEN'),
+        'repo' => env('GITHUB_DISPATCH_REPO', 'konstelasi/KonstelasiWebsite'),
+        'workflow' => env('GITHUB_DISPATCH_WORKFLOW', 'deploy.yml'),
+        'ref' => env('GITHUB_DISPATCH_REF', 'main'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
