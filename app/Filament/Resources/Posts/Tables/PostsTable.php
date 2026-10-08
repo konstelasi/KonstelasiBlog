@@ -14,6 +14,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 
 class PostsTable
 {
@@ -70,7 +71,19 @@ class PostsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->modalDescription(function (Collection $records): string {
+                            $live = $records->filter(fn (Post $post): bool => $post->status === PostStatus::Published);
+
+                            return $live->isEmpty()
+                                ? 'These drafts are not on the site. Delete them anyway?'
+                                : sprintf(
+                                    '%d of these posts %s live on the site, and their links will stop working (%s).',
+                                    $live->count(),
+                                    $live->count() === 1 ? 'is' : 'are',
+                                    $live->map(fn (Post $post): string => $post->slug)->implode(', '),
+                                );
+                        }),
                 ]),
             ]);
     }

@@ -96,6 +96,77 @@ class PostAdminTest extends TestCase
             ->assertHasFormErrors(['title_id']);
     }
 
+    public function test_unpublishing_a_live_post_asks_first(): void
+    {
+        $live = Post::factory()->published()->create();
+
+        Livewire::test(EditPost::class, ['record' => $live->getRouteKey()])
+            ->fillForm(['status' => PostStatus::Draft->value])
+            ->call('save')
+            ->assertActionMounted('confirmUnpublish');
+
+        $this->assertSame(PostStatus::Published, $live->fresh()->status, 'Nothing is saved until the writer agrees.');
+    }
+
+    public function test_the_offline_warning_names_both_addresses(): void
+    {
+        config(['services.site.url' => 'https://example.test/']);
+        $live = Post::factory()->published()->make(['slug' => 'hello-stars']);
+
+        $this->assertSame(
+            'This post is live at https://example.test/blog/hello-stars/ and https://example.test/id/blog/hello-stars/. Both links will stop working.',
+            $live->offlineWarning(),
+        );
+    }
+
+    public function test_agreeing_unpublishes_the_post(): void
+    {
+        $live = Post::factory()->published()->create();
+
+        Livewire::test(EditPost::class, ['record' => $live->getRouteKey()])
+            ->fillForm(['status' => PostStatus::Draft->value])
+            ->call('save')
+            ->callMountedAction()
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(PostStatus::Draft, $live->fresh()->status);
+    }
+
+    public function test_saving_a_live_post_that_stays_live_does_not_ask(): void
+    {
+        $live = Post::factory()->published()->create();
+
+        Livewire::test(EditPost::class, ['record' => $live->getRouteKey()])
+            ->fillForm(['title_en' => 'A corrected title'])
+            ->call('save')
+            ->assertActionNotMounted('confirmUnpublish');
+
+        $this->assertSame('A corrected title', $live->fresh()->title_en);
+    }
+
+    public function test_saving_a_draft_does_not_ask(): void
+    {
+        $draft = Post::factory()->create();
+
+        Livewire::test(EditPost::class, ['record' => $draft->getRouteKey()])
+            ->fillForm(['title_en' => 'Still a draft'])
+            ->call('save')
+            ->assertActionNotMounted('confirmUnpublish');
+    }
+
+    public function test_deleting_a_live_post_names_the_links_that_will_break(): void
+    {
+        config(['services.site.url' => 'https://example.test']);
+        $live = Post::factory()->published()->create(['slug' => 'hello-stars']);
+        $draft = Post::factory()->create();
+
+        Livewire::test(EditPost::class, ['record' => $live->getRouteKey()])
+            ->assertActionExists('delete', fn ($action): bool => str_contains($action->getModalDescription(), 'https://example.test/blog/hello-stars/'));
+
+        Livewire::test(EditPost::class, ['record' => $draft->getRouteKey()])
+            ->assertActionExists('delete', fn ($action): bool => ! str_contains($action->getModalDescription(), 'stop working'));
+    }
+
     public function test_the_form_counts_description_characters_and_body_words(): void
     {
         Livewire::test(CreatePost::class)

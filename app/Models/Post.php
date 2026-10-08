@@ -83,10 +83,18 @@ class Post extends Model
         return true;
     }
 
-    /** Where the post lives on the public website, in English. */
-    public function publicUrl(): string
+    /** Where the post lives on the public website. English is at the root, Indonesian under `/id/`. */
+    public function publicUrl(string $lang = 'en'): string
     {
-        return rtrim((string) config('services.site.url'), '/')."/blog/{$this->slug}/";
+        $prefix = $lang === 'en' ? '' : "/{$lang}";
+
+        return rtrim((string) config('services.site.url'), '/')."{$prefix}/blog/{$this->slug}/";
+    }
+
+    /** What a writer should know before a live post goes offline or is deleted. */
+    public function offlineWarning(): string
+    {
+        return sprintf('This post is live at %s and %s. Both links will stop working.', $this->publicUrl('en'), $this->publicUrl('id'));
     }
 
     /** Words in a Markdown source, split on whitespace like the public site does. */
