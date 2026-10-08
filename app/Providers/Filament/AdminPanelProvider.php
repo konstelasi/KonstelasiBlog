@@ -30,6 +30,10 @@ class AdminPanelProvider extends PanelProvider
             // `php artisan make:filament-user`.
             ->login()
             ->brandName('Konstelasi Blog')
+            // The site's logo drawn inline, so it takes the text colour in
+            // both themes. An <img> could not follow the theme.
+            ->brandLogo(fn () => view('filament.brand-logo'))
+            ->brandLogoHeight('2rem')
             ->favicon('/favicon.svg')
             ->colors([
                 'primary' => self::violet(),

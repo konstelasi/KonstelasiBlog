@@ -27,6 +27,7 @@ Guidance for AI coding agents in this repository. Setup, tests and deploys for h
 - Violet means active state and focus, as on the site. Don't use it as decoration.
 - Shape follows the site too: flat. Cards, the table and the login card are told apart by a 1px border (a 0-blur `box-shadow`), not Filament's shadow and ring. Corners are 10px (`--radius`) and 6px (`--radius-sm`), headings are weight 600 with -0.02em tracking. Only things that float (dropdowns, modals, search results) keep a shadow. The tokens at the top of that block (`--surface`, `--field` and so on) are copies of the site's, with dark mode keyed on Filament's `html.dark`.
 - Those rules are unlayered on purpose. Filament's own CSS sits in `@layer components`, so any unlayered rule beats it. A field's resting ring is replaced only under `:not(:focus-within)`, so Filament's brand focus ring still shows. Check the built CSS after adding a Filament class to the list.
+- The logo is `resources/views/filament/brand-logo.blade.php`, the site's `konstelasi-logo.svg` inlined with the panel name beside it, so it follows the text colour in both themes. It is a copy, so redo it if the site's logo changes.
 
 ## Tests
 

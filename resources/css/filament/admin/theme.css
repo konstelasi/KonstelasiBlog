@@ -147,3 +147,23 @@ html.dark {
     line-height: 1.15;
     text-wrap: balance;
 }
+
+/* The logo from resources/views/filament/brand-logo.blade.php, a mark and the
+   panel name side by side. It is as tall as the wrapper, which
+   `brandLogoHeight` sets. */
+.fi-logo {
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.konstelasi-brand-mark {
+    height: 100%;
+    width: auto;
+    flex: none;
+}
+
+.konstelasi-brand-name {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
