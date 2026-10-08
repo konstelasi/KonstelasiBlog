@@ -61,7 +61,7 @@ Sign in at `/admin` and open Posts. A post has a Publishing section (status, dat
 
 The slug comes from the English title and becomes the post's address, `konstelasi.co.id/blog/<slug>/`. Once a post is published the slug can't be changed, because that would break a live link. A published post has a "View on site" action in the list, which opens that address in a new tab (`SITE_URL` in `.env.example` says which site).
 
-The admin checks the house writing style as you save. It rejects an em dash or an en dash in any field, a hyphen with a space on each side standing in for one, and a colon or semicolon in a title or a Markdown heading. Each message gives the line and quotes the words around the problem, so it can be found without counting lines.
+The admin checks the house writing style as you save. It rejects an em dash or an en dash in any field, a hyphen with a space on each side standing in for one, and a colon or semicolon in a title or a Markdown heading. It also rejects an image with no alt text, so write a short description between the square brackets of `![](...)`. Each message gives the line and quotes the words around the problem, so it can be found without counting lines.
 
 To put a post on the site, set its status to Published and save. The public pages are static files, so the site has to be rebuilt, and saving does that: this app asks GitHub to run the website's Deploy workflow, whose build fetches `/api/posts` and turns each post into a page in both languages. The change is live about two or three minutes later. Editing a draft starts nothing. Setting a live post back to Draft, or deleting it, asks first and names the two addresses that will stop working.
 

@@ -19,6 +19,8 @@ class HouseStyleTest extends TestCase
             'colon in a Markdown heading' => [HouseStyle::MARKDOWN, "Intro.\n\n## Step one: install\n\nText."],
             'spaced hyphen as a dash' => [HouseStyle::TEXT, 'Fast - and small'],
             'spaced double hyphen as a dash' => [HouseStyle::MARKDOWN, 'Fast -- and small'],
+            'image with no alt text' => [HouseStyle::MARKDOWN, "Look.\n\n![](/storage/posts/chart.png)"],
+            'image with blank alt text' => [HouseStyle::MARKDOWN, 'Inline ![ ](/storage/posts/chart.png) here.'],
         ];
     }
 
@@ -33,6 +35,11 @@ class HouseStyleTest extends TestCase
             'table' => [HouseStyle::MARKDOWN, "| a | b |\n| --- | --- |\n| 1 | - |"],
             'spaced hyphen in inline code' => [HouseStyle::MARKDOWN, 'Run `a - b` first.'],
             'colon inside a fenced comment' => [HouseStyle::MARKDOWN, "```bash\n# note: keep it\nls - l\n```"],
+            'image with alt text' => [HouseStyle::MARKDOWN, '![The orbit chart](/storage/posts/chart.png)'],
+            'link with text' => [HouseStyle::MARKDOWN, 'See [the docs](https://example.test/docs).'],
+            'empty alt inside a code fence' => [HouseStyle::MARKDOWN, "```md\n![](x.png)\n```"],
+            'empty alt inside inline code' => [HouseStyle::MARKDOWN, 'Write `![](x.png)` to add one.'],
+            'empty image syntax in a plain field' => [HouseStyle::TEXT, '![](x.png)'],
         ];
     }
 
@@ -59,6 +66,7 @@ class HouseStyleTest extends TestCase
             'spaced hyphen' => [HouseStyle::TEXT, 'Fast - and small', 'near "Fast - and small"'],
             'colon in a title' => [HouseStyle::TITLE, 'StarDust: the next step', 'near "StarDust: the next'],
             'colon in a heading' => [HouseStyle::MARKDOWN, "Intro.\n\n## Step one: install\n\nText.", '"## Step one: install"'],
+            'image with no alt text' => [HouseStyle::MARKDOWN, "Look at this chart.\n\n![](/storage/posts/chart.png)", 'no alt text near "![](/storage/posts/chart.png)"'],
         ];
     }
 

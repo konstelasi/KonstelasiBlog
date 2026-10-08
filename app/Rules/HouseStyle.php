@@ -13,6 +13,11 @@ use Illuminate\Contracts\Validation\ValidationRule;
  *
  * Every field gets the dash rule. A title also gets the heading rule, and
  * a Markdown body gets the heading rule on each of its `#` headings.
+ *
+ * One rule here is not a port. A Markdown body also rejects an image with
+ * empty alt text, because the admin is where images are added and a screen
+ * reader has nothing to say about `![](...)`. `verify-copy.ts` has no such
+ * check, so this is the only place it is enforced.
  */
 class HouseStyle implements ValidationRule
 {
@@ -35,6 +40,9 @@ class HouseStyle implements ValidationRule
     private const SPACED_HYPHEN = '/(?<=[^\s|])[ \t]+-{1,2}[ \t]+(?=[^\s|])/u';
 
     private const TITLE_PUNCT = '/[:;]/';
+
+    /** A Markdown image whose alt text, the part in square brackets, is empty. */
+    private const EMPTY_ALT = '/!\[\s*\]\([^)]*\)/u';
 
     /** Characters of text kept on each side of a match when a message quotes it. */
     private const CONTEXT = 15;
@@ -93,6 +101,7 @@ class HouseStyle implements ValidationRule
         $inFence = false;
         $spacedHyphen = false;
         $heading = false;
+        $emptyAlt = false;
 
         foreach ($lines as $i => $line) {
             if ($kind === self::MARKDOWN && str_starts_with(trim($line), '```')) {
@@ -109,6 +118,11 @@ class HouseStyle implements ValidationRule
             if (! $spacedHyphen && preg_match(self::SPACED_HYPHEN, $prose, $match, PREG_OFFSET_CAPTURE)) {
                 $spacedHyphen = true;
                 $problems[] = self::where($kind, $i, count($lines)).'has a spaced hyphen standing in for a dash'.self::near($prose, $match[0]).'. Use a comma, a full stop or parentheses instead.';
+            }
+
+            if (! $emptyAlt && $kind === self::MARKDOWN && preg_match(self::EMPTY_ALT, $prose, $match, PREG_OFFSET_CAPTURE)) {
+                $emptyAlt = true;
+                $problems[] = self::where($kind, $i, count($lines)).'has an image with no alt text'.self::near($prose, $match[0]).'. Describe the image between the square brackets.';
             }
 
             if (! $heading && $kind === self::MARKDOWN && preg_match('/^#{1,6}\s/', $line)
