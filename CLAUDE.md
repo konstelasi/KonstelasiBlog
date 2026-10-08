@@ -17,6 +17,7 @@ Guidance for AI coding agents in this repository. Setup, tests and deploys for h
 - The slug is the live URL. It locks once the stored status is published (`Post::slugIsLocked()`).
 - `GET /api/posts` returns a bare JSON array (no `data` wrapper), published posts only, newest first: `{ slug, published_at, author, en: { title, description, body }, id: { ... } }`. The parent's content loader depends on this exact shape. Change both sides together.
 - `/` redirects (301) to `https://konstelasi.co.id/blog/`. Every response carries `X-Robots-Tag: noindex, nofollow` (`NoIndex` middleware, plus `public/.htaccess` for static files), and `robots.txt` disallows everything.
+- The Posts list has a "View on site" action for published posts. It opens `Post::publicUrl()`, the English address built from `SITE_URL` (`services.site.url`, default `https://konstelasi.co.id`).
 - `php artisan posts:import [path]` reads paired `en/<slug>.md` and `id/<slug>.md` (default `../src/content/blog`, a folder that no longer exists) and upserts them by slug as published. It was for the one-time move off Markdown.
 - Post images upload to the `public` disk (`storage/app/public/posts`) and are served from `/storage/...`, which needs `php artisan storage:link` on the host.
 

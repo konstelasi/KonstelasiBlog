@@ -4,9 +4,11 @@ namespace App\Filament\Resources\Posts\Tables;
 
 use App\Enums\PostStatus;
 use App\Models\Post;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -42,6 +44,13 @@ class PostsTable
                     ->options(PostStatus::class),
             ])
             ->recordActions([
+                // Only a published post has an address to open.
+                Action::make('view')
+                    ->label('View on site')
+                    ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+                    ->url(fn (Post $record): string => $record->publicUrl())
+                    ->openUrlInNewTab()
+                    ->visible(fn (Post $record): bool => $record->status === PostStatus::Published),
                 EditAction::make(),
             ])
             ->toolbarActions([

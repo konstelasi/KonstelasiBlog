@@ -37,6 +37,11 @@ return [
         'ref' => env('GITHUB_DISPATCH_REF', 'main'),
     ],
 
+    // The public website, for the "View on site" link on the Posts list.
+    'site' => [
+        'url' => env('SITE_URL', 'https://konstelasi.co.id'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

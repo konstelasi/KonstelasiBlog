@@ -71,6 +71,12 @@ class Post extends Model
         return $columns;
     }
 
+    /** Where the post lives on the public website, in English. */
+    public function publicUrl(): string
+    {
+        return rtrim((string) config('services.site.url'), '/')."/blog/{$this->slug}/";
+    }
+
     /** Words in a Markdown source, split on whitespace like the public site does. */
     public static function wordCount(?string $body): int
     {

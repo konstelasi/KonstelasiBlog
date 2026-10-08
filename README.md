@@ -59,7 +59,7 @@ It matches posts by slug, so running it twice updates the same posts instead of 
 
 Sign in at `/admin` and open Posts. A post has a Publishing section (status, date, slug and author) and one tab per language with a title, a short description and a Markdown body. Images dropped into a body are stored on the server and linked from the Markdown.
 
-The slug comes from the English title and becomes the post's address, `konstelasi.co.id/blog/<slug>/`. Once a post is published the slug can't be changed, because that would break a live link.
+The slug comes from the English title and becomes the post's address, `konstelasi.co.id/blog/<slug>/`. Once a post is published the slug can't be changed, because that would break a live link. A published post has a "View on site" action in the list, which opens that address in a new tab (`SITE_URL` in `.env.example` says which site).
 
 The admin checks the house writing style as you save. It rejects an em dash or an en dash in any field, a hyphen with a space on each side standing in for one, and a colon or semicolon in a title or a Markdown heading.
 
