@@ -25,9 +25,9 @@ REMOTE_HOST="${DEPLOY_HOST:-konstelasi}"
 # folders inside it.
 REMOTE_DIR="apps/blog"
 
-# The PHP binary on the host. cPanel's default `php` may be older than the
-# version MultiPHP gives the subdomain, so set this to the matching binary
-# if needed, for example REMOTE_PHP=/opt/cpanel/ea-php84/root/usr/bin/php.
+# The PHP binary on the host. The account runs PHP 8.4, so plain `php` is right.
+# Set this to another binary only if that changes, for example
+# REMOTE_PHP=/opt/cpanel/ea-php84/root/usr/bin/php.
 REMOTE_PHP="${REMOTE_PHP:-php}"
 
 ARCHIVE_NAME="konstelasi-blog-deploy-$(date +%Y%m%d%H%M%S).tar.gz"
@@ -38,11 +38,22 @@ ARCHIVE_PATH="${ARCHIVE_DIR}/${ARCHIVE_NAME}"
 
 cleanup() {
   rm -rf "$ARCHIVE_DIR"
+  if [ "${AGENT_STARTED:-0}" = 1 ]; then ssh-agent -k > /dev/null 2>&1 || true; fi
   # Put the development packages back, so the tests run again locally.
   echo "==> Restoring development dependencies..."
   composer install --no-interaction --quiet || true
 }
 trap cleanup EXIT
+
+# Unlock the key once per run. When no agent holds a key, start a private one,
+# ask for the passphrase a single time and stop the agent on exit. An agent
+# you unlocked yourself is used as it is.
+if ! ssh-add -l > /dev/null 2>&1; then
+  eval "$(ssh-agent -s)" > /dev/null
+  AGENT_STARTED=1
+  key="$(ssh -G "$REMOTE_HOST" 2> /dev/null | awk '/^identityfile /{print $2; exit}')"
+  ssh-add "${key/#\~/$HOME}" || { echo "Error: could not unlock the ssh key for '${REMOTE_HOST}'." >&2; exit 1; }
+fi
 
 echo "==> Testing..."
 composer install --no-interaction --quiet
