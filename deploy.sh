@@ -121,14 +121,25 @@ tar -xzf "\$HOME/${ARCHIVE_NAME}" -C .
 rm -f "\$HOME/${ARCHIVE_NAME}"
 
 mkdir -p storage/app/public storage/framework/cache/data storage/framework/sessions \
-  storage/framework/views storage/logs bootstrap/cache
+  storage/framework/views storage/logs bootstrap/cache resources/views
 
 "${REMOTE_PHP}" artisan package:discover
 "${REMOTE_PHP}" artisan migrate --force
-# Post images live on the public disk. After the first deploy the link
-# already exists, and the command says so without harm.
-"${REMOTE_PHP}" artisan storage:link || true
-"${REMOTE_PHP}" artisan optimize
+
+# Post images live on the public disk and are served through this link. It is
+# made with ln, because the host switches off the exec() that
+# artisan storage:link falls back on.
+if [ ! -e public/storage ] && [ ! -L public/storage ]; then
+  ln -s ../storage/app/public public/storage
+fi
+
+# The caches only make the app faster. If building them fails the app still
+# runs, so clear what was half built and carry on, because everything below
+# this point has to bring the app back up.
+if ! "${REMOTE_PHP}" artisan optimize; then
+  echo "Warning: the caches could not be built, so the app runs without them." >&2
+  "${REMOTE_PHP}" artisan optimize:clear || true
+fi
 "${REMOTE_PHP}" artisan up
 EOF
 
