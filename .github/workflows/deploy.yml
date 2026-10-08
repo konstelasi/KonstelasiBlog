@@ -1,0 +1,85 @@
+name: Deploy
+
+# Tests the blog admin and uploads it to the host, the same as running
+# `bash deploy.sh` on a laptop. A push to main deploys, so pushing is the one
+# press. It can also be started by hand from the Actions tab.
+#
+# The deploy runs the database migrations on the host. The tests run first and
+# stop it if they fail, but a migration is still a change to live data, so
+# check one before it reaches main.
+on:
+  push:
+    branches: [main]
+    # A change to documentation alone changes nothing in the app, so it does
+    # not deploy. A push that also touches code still does.
+    paths-ignore:
+      - '**.md'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+# A run in progress finishes. Requests that arrive meanwhile collapse into one
+# more run.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: intl, mbstring, pdo_sqlite, sqlite3, curl, dom, fileinfo, zip, gd, bcmath
+          tools: composer
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The tests need an application key, which a laptop gets from its .env.
+      # This one is made for the run, used by the tests only and thrown away.
+      # deploy.sh never ships a .env, so the host keeps its own key.
+      - name: Make a key for the tests
+        run: echo "APP_KEY=base64:$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+      # The same `konstelasi` alias deploy.sh expects on a laptop. Every value
+      # is a repository secret, because the logs of a public repository are
+      # public and GitHub hides secret values in them.
+      - name: Set up ssh
+        env:
+          SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          for name in SSH_HOST SSH_PORT SSH_USER SSH_KEY SSH_KNOWN_HOSTS; do
+            if [ -z "${!name}" ]; then
+              echo "The repository secret for $name is missing." >&2
+              exit 1
+            fi
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          {
+            echo "Host konstelasi"
+            echo "  HostName $SSH_HOST"
+            echo "  Port $SSH_PORT"
+            echo "  User $SSH_USER"
+            echo "  IdentityFile ~/.ssh/deploy_key"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+          } > ~/.ssh/config
+
+      - name: Deploy
+        run: bash deploy.sh

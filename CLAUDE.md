@@ -35,6 +35,7 @@ Guidance for AI coding agents in this repository. Setup, tests and deploys for h
 
 - `bash deploy.sh` from Git Bash. It runs the tests, builds the theme, installs Composer packages without dev, tars the app with `vendor/` and `public/build`, and unpacks it into `~/apps/blog` over the `konstelasi` SSH alias (or the one in `DEPLOY_HOST`). It never ships or touches `.env` or `storage/`.
 - Never run it, `ssh` or `scp` unless the user asks in that turn.
+- A push to `main` that touches more than Markdown also deploys, through `.github/workflows/deploy.yml` on GitHub's runner, with a key kept in repository secrets. The repository is public, so never print a secret or the host details in a workflow step. The deploy runs migrations on the host.
 - The remote folder must never be `public_html`, anything under `stardust`, or `konstelasi-staging`. The script deletes code folders inside it.
 - `git config core.autocrlf` is on for this machine, so `.gitattributes` forces LF. `deploy.sh` breaks on the host with CRLF.
 

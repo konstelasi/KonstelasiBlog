@@ -87,6 +87,8 @@ It needs no key, since everything in it is public on the site anyway. Drafts nev
 
 ## Deploying
 
+A push to `main` deploys. The `Deploy` workflow in `.github/workflows/` runs the tests on GitHub, builds the theme and ships the app with `deploy.sh`, with no SSH passphrase involved. It needs five repository secrets (`DEPLOY_SSH_HOST`, `DEPLOY_SSH_PORT`, `DEPLOY_SSH_USER`, `DEPLOY_SSH_KEY` and `DEPLOY_KNOWN_HOSTS`) that belong only to this repository. A push that changes only Markdown files deploys nothing, and neither does a change to the workflow alone. The deploy runs the database migrations on the host, so keep unfinished work on a branch until it is merged. The rest of this section is the manual route, which still works.
+
 `deploy.sh` ships a new version of this app. It runs the tests, builds the admin theme, installs the Composer packages without the development ones, and uploads the result over SSH. The host needs PHP but neither Composer nor Node.
 
 ```bash
