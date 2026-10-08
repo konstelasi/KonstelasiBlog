@@ -9,6 +9,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -28,6 +29,20 @@ class PostsTable
                     ->wrap(),
                 TextColumn::make('status')
                     ->badge(),
+                // A tick means the title, description and body are all written.
+                // Publishing needs both, so a draft with a grey cross is not ready.
+                IconColumn::make('has_en')
+                    ->label('EN')
+                    ->state(fn (Post $record): bool => $record->hasLanguage('en'))
+                    ->boolean()
+                    ->falseColor('gray')
+                    ->alignCenter(),
+                IconColumn::make('has_id')
+                    ->label('ID')
+                    ->state(fn (Post $record): bool => $record->hasLanguage('id'))
+                    ->boolean()
+                    ->falseColor('gray')
+                    ->alignCenter(),
                 TextColumn::make('published_at')
                     ->label('Published')
                     ->date()

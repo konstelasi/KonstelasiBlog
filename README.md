@@ -57,7 +57,7 @@ It matches posts by slug, so running it twice updates the same posts instead of 
 
 ## Writing a post
 
-Sign in at `/admin` and open Posts. A post has a Publishing section (status, date, slug and author) and one tab per language with a title, a short description and a Markdown body. Images dropped into a body are stored on the server and linked from the Markdown.
+Sign in at `/admin` and open Posts. A post has a Publishing section (status, date, slug and author) and one tab per language with a title, a short description and a Markdown body. Images dropped into a body are stored on the server and linked from the Markdown. In the list, the EN and ID columns show a tick when that language has a title, a description and a body, so a draft that isn't ready to publish is easy to spot.
 
 The slug comes from the English title and becomes the post's address, `konstelasi.co.id/blog/<slug>/`. Once a post is published the slug can't be changed, because that would break a live link. A published post has a "View on site" action in the list, which opens that address in a new tab (`SITE_URL` in `.env.example` says which site).
 

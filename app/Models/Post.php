@@ -71,6 +71,18 @@ class Post extends Model
         return $columns;
     }
 
+    /** Whether the title, description and body are all written in one language. */
+    public function hasLanguage(string $lang): bool
+    {
+        foreach (self::LANGUAGE_FIELDS as $field) {
+            if (blank($this->{"{$field}_{$lang}"})) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /** Where the post lives on the public website, in English. */
     public function publicUrl(): string
     {
