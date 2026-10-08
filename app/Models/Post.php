@@ -71,6 +71,19 @@ class Post extends Model
         return $columns;
     }
 
+    /**
+     * Whether the save that just happened could change the public site. That
+     * is so when the post is live now, or was live until this save. It is the
+     * same test `PostObserver` uses, read after the save instead of during it.
+     */
+    public function affectsPublicSite(): bool
+    {
+        $before = $this->getPrevious()['status'] ?? null;
+        $before = $before instanceof PostStatus ? $before : PostStatus::tryFrom((string) $before);
+
+        return $this->status === PostStatus::Published || $before === PostStatus::Published;
+    }
+
     /** Whether the title, description and body are all written in one language. */
     public function hasLanguage(string $lang): bool
     {

@@ -3,14 +3,18 @@
 namespace App\Filament\Resources\Posts\Pages;
 
 use App\Enums\PostStatus;
+use App\Filament\Resources\Posts\Pages\Concerns\ReportsRebuild;
 use App\Filament\Resources\Posts\PostResource;
 use App\Models\Post;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 
 class EditPost extends EditRecord
 {
+    use ReportsRebuild;
+
     protected static string $resource = PostResource::class;
 
     /**
@@ -62,6 +66,11 @@ class EditPost extends EditRecord
                     $this->unpublishConfirmed = false;
                 }
             });
+    }
+
+    protected function getSavedNotification(): ?Notification
+    {
+        return $this->withRebuildNotice(parent::getSavedNotification(), $this->getRecord());
     }
 
     /** Whether the stored post is live and the form now says draft. */

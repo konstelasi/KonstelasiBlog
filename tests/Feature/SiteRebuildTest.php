@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Enums\PostStatus;
 use App\Jobs\RebuildSite;
 use App\Models\Post;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -102,23 +104,62 @@ class SiteRebuildTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_a_github_error_is_swallowed(): void
+    public function test_a_github_error_is_swallowed_and_remembered(): void
     {
         config(['services.github.token' => 'test-token']);
         Http::fake(['api.github.com/*' => Http::response('boom', 500)]);
+        $this->assertNull(RebuildSite::failedAt());
 
         (new RebuildSite)->handle();
 
         Http::assertSentCount(1);
+        $this->assertNotNull(RebuildSite::failedAt());
     }
 
-    public function test_a_network_failure_is_swallowed(): void
+    public function test_a_network_failure_is_swallowed_and_remembered(): void
     {
         config(['services.github.token' => 'test-token']);
         Http::fake(['api.github.com/*' => fn () => throw new ConnectionException('offline')]);
 
         (new RebuildSite)->handle();
 
-        $this->addToAssertionCount(1);
+        $this->assertNotNull(RebuildSite::failedAt());
+    }
+
+    public function test_a_request_that_goes_through_clears_an_earlier_failure(): void
+    {
+        config(['services.github.token' => 'test-token']);
+        Cache::forever(RebuildSite::FAILED_KEY, now()->subHour()->timestamp);
+        Http::fake(['api.github.com/*' => Http::response('', 204)]);
+
+        (new RebuildSite)->handle();
+
+        $this->assertNull(RebuildSite::failedAt());
+    }
+
+    public function test_without_a_token_nothing_is_remembered_either_way(): void
+    {
+        config(['services.github.token' => null]);
+
+        (new RebuildSite)->handle();
+        $this->assertNull(RebuildSite::failedAt());
+
+        $earlier = now()->subHour()->timestamp;
+        Cache::forever(RebuildSite::FAILED_KEY, $earlier);
+        (new RebuildSite)->handle();
+        $this->assertSame($earlier, RebuildSite::failedAt()->timestamp);
+    }
+
+    public function test_the_admin_warns_while_the_last_rebuild_failed(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $this->get('/admin')->assertOk()->assertDontSee('The last site rebuild did not start');
+
+        Cache::forever(RebuildSite::FAILED_KEY, now()->subMinutes(5)->timestamp);
+
+        $this->get('/admin')->assertOk()
+            ->assertSee('The last site rebuild did not start')
+            ->assertSee('5 minutes ago');
     }
 }

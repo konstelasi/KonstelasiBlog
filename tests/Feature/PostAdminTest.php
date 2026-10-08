@@ -7,7 +7,9 @@ use App\Filament\Resources\Posts\Pages\CreatePost;
 use App\Filament\Resources\Posts\Pages\EditPost;
 use App\Models\Post;
 use App\Models\User;
+use Filament\Notifications\Livewire\Notifications;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -165,6 +167,81 @@ class PostAdminTest extends TestCase
 
         Livewire::test(EditPost::class, ['record' => $draft->getRouteKey()])
             ->assertActionExists('delete', fn ($action): bool => ! str_contains($action->getModalDescription(), 'stop working'));
+    }
+
+    /** @return list<?string> The body of every toast the last request sent. */
+    private function toastBodies(): array
+    {
+        $toasts = new Notifications;
+        $toasts->mount();
+
+        return $toasts->notifications->map(fn ($toast) => $toast->getBody())->values()->all();
+    }
+
+    public function test_saving_a_live_post_says_the_site_is_rebuilding(): void
+    {
+        Bus::fake();
+        config(['services.github.token' => 'test-token']);
+        $live = Post::factory()->published()->create();
+
+        Livewire::test(EditPost::class, ['record' => $live->getRouteKey()])
+            ->fillForm(['title_en' => 'A corrected title'])
+            ->call('save');
+
+        $this->assertSame(['The site is rebuilding. The change is live in a few minutes.'], $this->toastBodies());
+    }
+
+    public function test_taking_a_post_offline_says_the_site_is_rebuilding_too(): void
+    {
+        Bus::fake();
+        config(['services.github.token' => 'test-token']);
+        $live = Post::factory()->published()->create();
+
+        Livewire::test(EditPost::class, ['record' => $live->getRouteKey()])
+            ->fillForm(['status' => PostStatus::Draft->value])
+            ->call('save')
+            ->callMountedAction();
+
+        $this->assertSame(PostStatus::Draft, $live->fresh()->status);
+        $this->assertSame(['The site is rebuilding. The change is live in a few minutes.'], $this->toastBodies());
+    }
+
+    public function test_publishing_a_new_post_says_the_site_is_rebuilding(): void
+    {
+        Bus::fake();
+        config(['services.github.token' => 'test-token']);
+
+        Livewire::test(CreatePost::class)
+            ->fillForm([...$this->complete(), 'status' => PostStatus::Published->value])
+            ->call('create');
+
+        $this->assertSame(['The site is rebuilding. The change is live in a few minutes.'], $this->toastBodies());
+    }
+
+    public function test_saving_a_draft_says_nothing_about_a_rebuild(): void
+    {
+        Bus::fake();
+        config(['services.github.token' => 'test-token']);
+        $draft = Post::factory()->create();
+
+        Livewire::test(EditPost::class, ['record' => $draft->getRouteKey()])
+            ->fillForm(['title_en' => 'Still a draft'])
+            ->call('save');
+
+        $this->assertSame([null], $this->toastBodies());
+    }
+
+    public function test_without_a_token_the_toast_stays_plain(): void
+    {
+        Bus::fake();
+        config(['services.github.token' => null]);
+        $live = Post::factory()->published()->create();
+
+        Livewire::test(EditPost::class, ['record' => $live->getRouteKey()])
+            ->fillForm(['title_en' => 'A corrected title'])
+            ->call('save');
+
+        $this->assertSame([null], $this->toastBodies());
     }
 
     public function test_the_form_counts_description_characters_and_body_words(): void

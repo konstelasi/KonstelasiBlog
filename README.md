@@ -65,7 +65,7 @@ The admin checks the house writing style as you save. It rejects an em dash or a
 
 To put a post on the site, set its status to Published and save. The public pages are static files, so the site has to be rebuilt, and saving does that: this app asks GitHub to run the website's Deploy workflow, whose build fetches `/api/posts` and turns each post into a page in both languages. The change is live about two or three minutes later. Editing a draft starts nothing. Setting a live post back to Draft, or deleting it, asks first and names the two addresses that will stop working.
 
-That needs `GITHUB_DISPATCH_TOKEN` in the host's `.env`, a fine-grained GitHub token with only the Actions read and write permission on the website repository (`GITHUB_DISPATCH_REPO` in `.env.example`). Without it saving still works, and the site only changes when someone runs `bash deploy.sh` in the parent repo or runs the workflow by hand in the Actions tab. If the request fails, the failure is written to the log and the save is not affected.
+That needs `GITHUB_DISPATCH_TOKEN` in the host's `.env`, a fine-grained GitHub token with only the Actions read and write permission on the website repository (`GITHUB_DISPATCH_REPO` in `.env.example`). Without it saving still works, and the site only changes when someone runs `bash deploy.sh` in the parent repo or runs the workflow by hand in the Actions tab. If the request fails, the failure is written to the log and the save is not affected. The "Saved" message says when a rebuild has been asked for and links to the workflow on GitHub. After a failed request every admin page shows a warning that the public blog may be out of date, until the next request goes through.
 
 ## The API
 

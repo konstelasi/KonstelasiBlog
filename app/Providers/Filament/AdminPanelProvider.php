@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Jobs\RebuildSite;
 use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -10,6 +11,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -43,6 +45,13 @@ class AdminPanelProvider extends PanelProvider
             // calls a font CDN.
             ->font('Poppins', provider: LocalFontProvider::class)
             ->viteTheme('resources/css/filament/admin/theme.css')
+            // A rebuild runs after the response, so a failure can't be shown
+            // when it happens. `RebuildSite` leaves a note, and this shows it.
+            ->renderHook(PanelsRenderHook::CONTENT_START, function (): string {
+                $failedAt = RebuildSite::failedAt();
+
+                return $failedAt ? view('filament.rebuild-warning', ['failedAt' => $failedAt])->render() : '';
+            })
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([

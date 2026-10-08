@@ -2,7 +2,10 @@
 
 namespace App\Jobs;
 
+use Carbon\CarbonInterface;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -12,11 +15,24 @@ use Throwable;
  * blog pages from this app's API and uploads them.
  *
  * It never fails a save. Without a token (local development, tests) it does
- * nothing, and a GitHub error is only logged.
+ * nothing, and a GitHub error is logged. It runs after the response, so it
+ * can't tell the writer then. It leaves a note in the cache instead, and the
+ * admin shows a warning on every page until a later request goes through.
  */
 class RebuildSite
 {
     use Dispatchable;
+
+    /** Holds the time of the last refused or failed request, until one succeeds. */
+    public const FAILED_KEY = 'site-rebuild-failed';
+
+    /** When the last request failed, or null if the last one went through. */
+    public static function failedAt(): ?CarbonInterface
+    {
+        $at = Cache::get(self::FAILED_KEY);
+
+        return $at ? Carbon::createFromTimestamp($at) : null;
+    }
 
     public function handle(): void
     {
@@ -40,9 +56,20 @@ class RebuildSite
 
             if ($response->failed()) {
                 Log::warning('The site rebuild was not started.', ['status' => $response->status()]);
+                self::markFailed();
+
+                return;
             }
+
+            Cache::forget(self::FAILED_KEY);
         } catch (Throwable $e) {
             Log::warning('The site rebuild was not started.', ['error' => $e::class]);
+            self::markFailed();
         }
+    }
+
+    private static function markFailed(): void
+    {
+        Cache::forever(self::FAILED_KEY, now()->timestamp);
     }
 }
