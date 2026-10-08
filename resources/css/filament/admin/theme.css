@@ -42,3 +42,108 @@ html.dark input[type='checkbox'].fi-checkbox-input:indeterminate {
 html.dark input[type='radio'].fi-radio-input:checked {
     background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 16 16' fill='%23090909' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3C/svg%3E");
 }
+
+/* Shape and feel. The site is flat: surfaces are told apart by a 1px border,
+   never a shadow, corners are 10px and 6px, and headings are weight 600 with
+   tight tracking. Filament paints its cards with a shadow and a ring, so the
+   rules below replace those. They are unlayered, which beats Filament's own
+   rules in `@layer components` whatever their specificity. */
+
+/* Names and values follow the site's tokens.css. Dark mode is the `dark`
+   class Filament puts on <html>. `--surface` is the site's `--bg-raised`.
+   `--field` is for inputs, a step off the card they sit on. */
+:root {
+    --bg: #f6f6f6;
+    --surface: #eeeeee;
+    --field: #f6f6f6;
+    --border: #d2d2d2;
+    --border-hover: #acacac;
+    --brand: #311b92;
+    --radius: 10px;
+    --radius-sm: 6px;
+}
+
+html.dark {
+    --bg: #090909;
+    --surface: #111111;
+    --field: #181818;
+    --border: #2d2d2d;
+    --border-hover: #535353;
+    --brand: #b39ddb;
+}
+
+::selection {
+    background: var(--brand);
+    color: var(--bg);
+}
+
+/* Cards: sections, the table, the login card, empty states and the rest.
+   A 0-blur 1px shadow stands in for the ring, so nothing shifts by a pixel. */
+.fi-section:not(.fi-section-not-contained):not(.fi-aside),
+.fi-section:not(.fi-section-not-contained).fi-aside > .fi-section-content-ctn,
+.fi-ta-ctn,
+.fi-simple-main,
+.fi-empty-state:not(.fi-empty-state-not-contained),
+.fi-callout,
+.fi-fo-repeater-item,
+.fi-fo-builder-item,
+.fi-tabs:not(.fi-contained),
+.fi-sc-tabs.fi-contained {
+    background-color: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+/* On a phone the login card runs edge to edge, as it does in Filament. */
+@media (max-width: 639.98px) {
+    .fi-simple-main {
+        border-radius: 0;
+    }
+}
+
+/* The top bar is a band across the page, so it takes a rule underneath and
+   no corners. */
+.fi-topbar {
+    background-color: var(--bg);
+    box-shadow: 0 1px 0 var(--border);
+}
+
+/* Things that float keep a shadow, because without one they would lose the
+   page behind them. */
+.fi-dropdown-panel,
+.fi-modal-window,
+.fi-global-search-results-ctn {
+    background-color: var(--surface);
+    box-shadow:
+        0 0 0 1px var(--border),
+        0 16px 36px -12px rgb(0 0 0 / 0.3);
+}
+
+.fi-dropdown-panel {
+    border-radius: var(--radius-sm);
+}
+
+/* Fields and buttons. A field keeps Filament's brand ring while it has focus,
+   so the resting state is the only one replaced. */
+.fi-input-wrp:not(.fi-disabled):not(.fi-invalid):not(:focus-within) {
+    background-color: var(--field);
+    box-shadow: 0 0 0 1px var(--border-hover);
+}
+
+.fi-input-wrp,
+.fi-btn,
+.fi-pagination-items {
+    border-radius: var(--radius-sm);
+}
+
+/* Headings, as on the site. */
+.fi-header-heading,
+.fi-simple-header-heading,
+.fi-section-header-heading,
+.fi-ta-header-heading,
+.fi-modal-heading {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    text-wrap: balance;
+}
