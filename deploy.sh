@@ -4,8 +4,9 @@
 #   bash deploy.sh
 #
 # It assumes a `konstelasi` entry in your own ~/.ssh/config (host, port, user
-# and key), so no credential of any kind lives in this repository. Run it
-# from Git Bash on Windows, since `npm run` may find the WSL bash.exe first.
+# and key), so no credential of any kind lives in this repository. Set
+# DEPLOY_HOST to use another alias. Run it from Git Bash on Windows, since
+# `npm run` may find the WSL bash.exe first.
 #
 # Everything is built here, so the host needs PHP but neither Composer nor
 # Node. The host's .env and storage/ are never touched, because the archive
@@ -14,15 +15,15 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-REMOTE_HOST="konstelasi"
+REMOTE_HOST="${DEPLOY_HOST:-konstelasi}"
 
 # Relative to the remote $HOME, the default working directory of an SSH
 # session, so the account's username never appears here. The subdomain
-# blog.konstelasi.co.id has its document root at ~/konstelasi-blog/public.
-# This folder must never be public_html, anything under stardust, or one of
-# the site's own folders (konstelasi-staging, konstelasi-site), because the
-# cleanup below deletes code folders inside it.
-REMOTE_DIR="konstelasi-blog"
+# blog.konstelasi.co.id has its document root at ~/apps/blog/public.
+# This folder must never be public_html, anything under stardust, or another
+# site's folder (konstelasi-staging), because the cleanup below deletes code
+# folders inside it.
+REMOTE_DIR="apps/blog"
 
 # The PHP binary on the host. cPanel's default `php` may be older than the
 # version MultiPHP gives the subdomain, so set this to the matching binary
@@ -30,9 +31,13 @@ REMOTE_DIR="konstelasi-blog"
 REMOTE_PHP="${REMOTE_PHP:-php}"
 
 ARCHIVE_NAME="konstelasi-blog-deploy-$(date +%Y%m%d%H%M%S).tar.gz"
+# The archive is written outside the app folder. Inside it, tar sees the folder
+# change while it reads and exits with code 1.
+ARCHIVE_DIR="$(mktemp -d)"
+ARCHIVE_PATH="${ARCHIVE_DIR}/${ARCHIVE_NAME}"
 
 cleanup() {
-  rm -f "$ARCHIVE_NAME"
+  rm -rf "$ARCHIVE_DIR"
   # Put the development packages back, so the tests run again locally.
   echo "==> Restoring development dependencies..."
   composer install --no-interaction --quiet || true
@@ -58,7 +63,7 @@ composer install --no-dev --optimize-autoloader --no-interaction
 echo "==> Packaging..."
 # bootstrap/cache holds caches with this machine's paths in them, so the
 # host builds its own.
-tar -czf "$ARCHIVE_NAME" \
+tar -czf "$ARCHIVE_PATH" \
   --exclude='./.git' \
   --exclude='./.env' \
   --exclude='./.env.*' \
@@ -73,12 +78,11 @@ tar -czf "$ARCHIVE_NAME" \
   --exclude='./bootstrap/cache/*.php' \
   --exclude='./bootstrap/cache/filament' \
   --exclude='./database/*.sqlite' \
-  --exclude="./${ARCHIVE_NAME}" \
   --exclude='./deploy.sh' \
   .
 
 echo "==> Uploading to ${REMOTE_HOST}:~/${ARCHIVE_NAME} ..."
-scp "$ARCHIVE_NAME" "${REMOTE_HOST}:${ARCHIVE_NAME}"
+scp "$ARCHIVE_PATH" "${REMOTE_HOST}:${ARCHIVE_NAME}"
 
 echo "==> Installing into ~/${REMOTE_DIR} ..."
 # The code folders are wiped before extracting, so files that a release

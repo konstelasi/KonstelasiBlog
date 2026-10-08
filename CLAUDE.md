@@ -33,9 +33,9 @@ Guidance for AI coding agents in this repository. Setup, tests and deploys for h
 
 ## Deploy
 
-- `bash deploy.sh` from Git Bash. It runs the tests, builds the theme, installs Composer packages without dev, tars the app with `vendor/` and `public/build`, and unpacks it into `~/konstelasi-blog` over the `konstelasi` SSH alias. It never ships or touches `.env` or `storage/`.
+- `bash deploy.sh` from Git Bash. It runs the tests, builds the theme, installs Composer packages without dev, tars the app with `vendor/` and `public/build`, and unpacks it into `~/apps/blog` over the `konstelasi` SSH alias (or the one in `DEPLOY_HOST`). It never ships or touches `.env` or `storage/`.
 - Never run it, `ssh` or `scp` unless the user asks in that turn.
-- The remote folder must never be `public_html`, anything under `stardust`, `konstelasi-staging` or `konstelasi-site`. The script deletes code folders inside it.
+- The remote folder must never be `public_html`, anything under `stardust`, or `konstelasi-staging`. The script deletes code folders inside it.
 - `git config core.autocrlf` is on for this machine, so `.gitattributes` forces LF. `deploy.sh` breaks on the host with CRLF.
 
 ## Indonesian copy

@@ -8,7 +8,7 @@ Every post has an English and an Indonesian version, and the admin won't publish
 
 ## Running it locally
 
-You need PHP 8.3 or later with the `intl` extension, Composer, Node 22 and a MariaDB server.
+You need PHP 8.4.1 or later with the `intl` extension, Composer, Node 22 and a MariaDB server.
 
 ```bash
 composer install
@@ -92,7 +92,7 @@ It needs no key, since everything in it is public on the site anyway. Drafts nev
 bash deploy.sh
 ```
 
-Run it from Git Bash on Windows. It reads the host, port, user and key from a `konstelasi` alias in your own `~/.ssh/config`, so no credential lives in this repository. On the host it unpacks into `~/konstelasi-blog`, runs the migrations and rebuilds Laravel's caches. It never overwrites the host's `.env` or `storage/` folder, which hold the settings and the uploaded images.
+Run it from Git Bash on Windows. It reads the host, port, user and key from a `konstelasi` alias in your own `~/.ssh/config`, so no credential lives in this repository. Set `DEPLOY_HOST` to use another alias. On the host it unpacks into `~/apps/blog`, runs the migrations and rebuilds Laravel's caches. It never overwrites the host's `.env` or `storage/` folder, which hold the settings and the uploaded images.
 
 If the host's default `php` is older than the version the subdomain runs, point the script at the right one, for example `REMOTE_PHP=/opt/cpanel/ea-php84/root/usr/bin/php bash deploy.sh`.
 
@@ -112,10 +112,10 @@ These steps happen once, in cPanel and on your own machine.
        IdentityFile ~/.ssh/<your key>
    ```
 
-2. In cPanel, create the subdomain `blog.konstelasi.co.id` with its document root at `konstelasi-blog/public`. The folder name must not be `public_html`, anything under `stardust`, or one of the site's own folders.
-3. In MultiPHP Manager, give `blog.konstelasi.co.id` PHP 8.3 or later, with the `intl` extension on.
+2. In cPanel, create the subdomain `blog.konstelasi.co.id` with its document root at `apps/blog/public`. The folder must not be `public_html`, anything under `stardust`, or another site's folder.
+3. Give the blog PHP 8.4.1 or later, with the `intl` extension on. The locked packages need 8.4.1, even though `composer.json` still says 8.3. Where cPanel has MultiPHP Manager, set it for `blog.konstelasi.co.id` alone. On a CloudLinux host that only has Select PHP Version, the setting covers the whole account, and a folder's own `.htaccess` handler line is ignored.
 4. In MySQL Databases, create a database and a user, and give the user all privileges on that database.
-5. Write `~/konstelasi-blog/.env` on the host by hand, starting from `.env.example`. Set `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://blog.konstelasi.co.id`, the database details from step 4, and an `APP_KEY` made with `php artisan key:generate --show`. The deploy stops if this file is missing.
+5. Write `~/apps/blog/.env` on the host by hand, starting from `.env.example`. Set `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://blog.konstelasi.co.id`, the database details from step 4, and an `APP_KEY` made with `php artisan key:generate --show`. The deploy stops if this file is missing.
 6. Run `bash deploy.sh`.
-7. Over SSH, in `~/konstelasi-blog`, create the admin account with `php artisan make:filament-user`. To bring the old posts over, copy the parent's `src/content/blog` folder up and run `php artisan posts:import <that folder>`, or import locally and move the rows across.
+7. Over SSH, in `~/apps/blog`, create the admin account with `php artisan make:filament-user`. To bring the old posts over, copy the parent's `src/content/blog` folder up and run `php artisan posts:import <that folder>`, or import locally and move the rows across.
 8. Check that `https://blog.konstelasi.co.id/api/posts` answers, that `/admin` signs you in, and that an image uploaded into a post opens from its `/storage/...` address.
