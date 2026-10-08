@@ -98,13 +98,21 @@ class PostForm
                 $title,
                 Textarea::make("description_{$lang}")
                     ->label('Description')
-                    ->helperText('One or two sentences, shown in the post list and in link previews.')
+                    // A hint only. Link previews tend to cut the text off near 160
+                    // characters, but a longer description still saves.
+                    ->helperText(fn (Get $get): string => 'One or two sentences, shown in the post list and in link previews. '
+                        .mb_strlen((string) $get("description_{$lang}")).' of about 160 characters.')
+                    ->live(debounce: 500)
                     ->rows(2)
                     ->required(fn (Get $get): bool => self::publishing($get))
                     ->rules([HouseStyle::text()])
                     ->validationMessages(self::requiredMessage()),
                 MarkdownEditor::make("body_{$lang}")
                     ->label('Body')
+                    // Sent when the cursor leaves the editor, not on every key,
+                    // because the body is long.
+                    ->helperText(fn (Get $get): string => self::readingFigures((string) $get("body_{$lang}")))
+                    ->live(onBlur: true)
                     ->required(fn (Get $get): bool => self::publishing($get))
                     ->rules([HouseStyle::markdown()])
                     ->validationMessages(self::requiredMessage())
@@ -113,6 +121,14 @@ class PostForm
                     ->fileAttachmentsDisk('public')
                     ->fileAttachmentsDirectory('posts'),
             ]);
+    }
+
+    private static function readingFigures(string $body): string
+    {
+        $words = Post::wordCount($body);
+        $minutes = Post::readingMinutes($body);
+
+        return sprintf('%s %s, about %d %s to read.', number_format($words), $words === 1 ? 'word' : 'words', $minutes, $minutes === 1 ? 'minute' : 'minutes');
     }
 
     /** Whether the form is about to publish the post. */

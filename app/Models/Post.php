@@ -71,6 +71,22 @@ class Post extends Model
         return $columns;
     }
 
+    /** Words in a Markdown source, split on whitespace like the public site does. */
+    public static function wordCount(?string $body): int
+    {
+        return count(preg_split('/\s+/u', (string) $body, -1, PREG_SPLIT_NO_EMPTY));
+    }
+
+    /**
+     * About 200 words a minute, never less than one. This is the same sum as
+     * `src/views/Post.astro` in the website repository, so the figure here is
+     * the one readers see. Change both together.
+     */
+    public static function readingMinutes(?string $body): int
+    {
+        return max(1, (int) round(self::wordCount($body) / 200));
+    }
+
     #[Scope]
     protected function published(Builder $query): void
     {

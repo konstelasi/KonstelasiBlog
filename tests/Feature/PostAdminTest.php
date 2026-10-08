@@ -96,6 +96,17 @@ class PostAdminTest extends TestCase
             ->assertHasFormErrors(['title_id']);
     }
 
+    public function test_the_form_counts_description_characters_and_body_words(): void
+    {
+        Livewire::test(CreatePost::class)
+            ->fillForm([
+                'description_en' => 'Twelve chars',
+                'body_en' => 'one two three',
+            ])
+            ->assertSee('12 of about 160 characters')
+            ->assertSee('3 words, about 1 minute to read');
+    }
+
     public function test_the_slug_follows_the_english_title(): void
     {
         Livewire::test(CreatePost::class)
