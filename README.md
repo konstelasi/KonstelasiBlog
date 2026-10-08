@@ -47,10 +47,9 @@ php artisan make:filament-user
 
 ## Importing the old posts
 
-The two posts from the old WordPress site were kept as Markdown in the parent repo, one file per language. This command reads them into the database as published posts.
+The two posts from the old WordPress site were kept as Markdown in the parent repo, one file per language, and have been imported once into the live database. The Markdown files were then removed from the parent, so they exist only in its git history. This command reads a folder of that shape into the database as published posts.
 
 ```bash
-php artisan posts:import            # reads ../src/content/blog
 php artisan posts:import some/path  # any folder with en/ and id/ inside
 ```
 
@@ -117,5 +116,5 @@ These steps happen once, in cPanel and on your own machine.
 4. In MySQL Databases, create a database and a user, and give the user all privileges on that database.
 5. Write `~/apps/blog/.env` on the host by hand, starting from `.env.example`. Set `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://blog.konstelasi.co.id`, the database details from step 4, and an `APP_KEY` made with `php artisan key:generate --show`. The deploy stops if this file is missing.
 6. Run `bash deploy.sh`.
-7. Over SSH, in `~/apps/blog`, create the admin account with `php artisan make:filament-user`. To bring the old posts over, copy the parent's `src/content/blog` folder up and run `php artisan posts:import <that folder>`, or import locally and move the rows across.
+7. Over SSH, in `~/apps/blog`, create the admin account with `php artisan make:filament-user`. To bring the old posts over, copy the old Markdown posts up (the parent no longer has them, so check them out of its git history) and run `php artisan posts:import <that folder>`, or import locally and move the rows across.
 8. Check that `https://blog.konstelasi.co.id/api/posts` answers, that `/admin` signs you in, and that an image uploaded into a post opens from its `/storage/...` address.

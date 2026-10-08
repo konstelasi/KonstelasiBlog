@@ -8,7 +8,7 @@ Guidance for AI coding agents in this repository. Setup, tests and deploys for h
 - Readers never see this app. The public blog pages (`konstelasi.co.id/blog/<slug>/` and `/id/blog/<slug>/`) are built by the parent Astro repo, `..` (KonstelasiWebsite), which fetches `GET /api/posts` at build time and bakes the posts into static pages.
 - Publishing a post is two steps: publish it in the admin, then run `bash deploy.sh` in the parent repo so the site rebuilds. This app's own `deploy.sh` ships code changes to the admin only.
 - This is its own git repo, nested inside the parent's folder on purpose. Never commit across the two, and never `git add` this folder from the parent (it would become an embedded repo). The parent's tsconfig excludes it.
-- Until this app is live at `blog.konstelasi.co.id`, the parent still builds the blog from its own Markdown files in `src/content/blog/`. Its `src/content.config.ts` uses the API loader (`src/lib/blog-loader.ts`) only when `BLOG_API_URL` is set, in the shell or the parent's ignored `.env`, which is how a local preview reads this app. The parent's `deploy.sh` exports an empty `BLOG_API_URL`, so deploys build from Markdown. The switch is setting it there to `https://blog.konstelasi.co.id`, after which this app's database is the only source and the Markdown files are deleted.
+- This app is live at `blog.konstelasi.co.id` and is the only source of the blog. The parent's `src/content.config.ts` always uses the API loader (`src/lib/blog-loader.ts`). It asks `https://blog.konstelasi.co.id` unless `BLOG_API_URL` says otherwise, in the shell or the parent's ignored `.env`, which is how a local preview reads this app. The parent's `deploy.sh` always exports the live URL. The old Markdown posts are gone from the parent and survive only in its git history.
 
 ## Rules of the app
 
@@ -17,7 +17,7 @@ Guidance for AI coding agents in this repository. Setup, tests and deploys for h
 - The slug is the live URL. It locks once the stored status is published (`Post::slugIsLocked()`).
 - `GET /api/posts` returns a bare JSON array (no `data` wrapper), published posts only, newest first: `{ slug, published_at, author, en: { title, description, body }, id: { ... } }`. The parent's content loader depends on this exact shape. Change both sides together.
 - `/` redirects (301) to `https://konstelasi.co.id/blog/`. Every response carries `X-Robots-Tag: noindex, nofollow` (`NoIndex` middleware, plus `public/.htaccess` for static files), and `robots.txt` disallows everything.
-- `php artisan posts:import [path]` reads paired `en/<slug>.md` and `id/<slug>.md` (default `../src/content/blog`) and upserts them by slug as published. It was for the one-time move off Markdown.
+- `php artisan posts:import [path]` reads paired `en/<slug>.md` and `id/<slug>.md` (default `../src/content/blog`, a folder that no longer exists) and upserts them by slug as published. It was for the one-time move off Markdown.
 - Post images upload to the `public` disk (`storage/app/public/posts`) and are served from `/storage/...`, which needs `php artisan storage:link` on the host.
 
 ## Admin theme
