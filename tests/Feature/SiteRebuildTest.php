@@ -152,7 +152,7 @@ class SiteRebuildTest extends TestCase
 
     public function test_the_admin_warns_while_the_last_rebuild_failed(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         $this->get('/admin')->assertOk()->assertDontSee('The last site rebuild did not start');
 

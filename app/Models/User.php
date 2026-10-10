@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Rbac;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -34,10 +35,11 @@ class User extends Authenticatable implements FilamentUser
 
     /**
      * Registration is off, so the only accounts are the ones made with
-     * `php artisan make:filament-user`, and each of them runs the blog.
+     * `php artisan make:filament-user`. An account gets into the admin only
+     * once it has a role (`php artisan rbac:assign`).
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return true;
+        return $this->hasAnyRole(Rbac::ROLES);
     }
 }

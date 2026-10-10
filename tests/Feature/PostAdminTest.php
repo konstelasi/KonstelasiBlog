@@ -22,7 +22,7 @@ class PostAdminTest extends TestCase
     {
         parent::setUp();
 
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
     }
 
     /** @return array<string, string> */
@@ -41,7 +41,7 @@ class PostAdminTest extends TestCase
 
     public function test_a_new_post_is_written_by_whoever_is_signed_in(): void
     {
-        $writer = User::factory()->create(['name' => 'Rani Putri']);
+        $writer = User::factory()->writer()->create(['name' => 'Rani Putri']);
         $this->actingAs($writer);
 
         Livewire::test(CreatePost::class)
@@ -61,7 +61,7 @@ class PostAdminTest extends TestCase
     {
         $writer = User::factory()->create(['name' => 'Rani Putri']);
         $post = Post::factory()->create(['user_id' => $writer->id, 'author' => 'Rani Putri']);
-        $editor = User::factory()->create(['name' => 'Budi Santoso']);
+        $editor = User::factory()->editor()->create(['name' => 'Budi Santoso']);
         $this->actingAs($editor);
 
         Livewire::test(EditPost::class, ['record' => $post->getRouteKey()])

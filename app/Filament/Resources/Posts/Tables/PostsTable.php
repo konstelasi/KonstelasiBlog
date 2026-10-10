@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Posts\Tables;
 
 use App\Enums\PostStatus;
+use App\Filament\Resources\Posts\PostResource;
 use App\Models\Post;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -68,10 +69,28 @@ class PostsTable
                     ->openUrlInNewTab()
                     ->visible(fn (Post $record): bool => $record->status === PostStatus::Published),
                 EditAction::make(),
+                // Someone who may not edit a post can still read it.
+                Action::make('read')
+                    ->label('View')
+                    ->icon(Heroicon::OutlinedEye)
+                    ->color('gray')
+                    ->url(fn (Post $record): string => PostResource::getUrl('view', ['record' => $record]))
+                    ->visible(fn (Post $record): bool => ! PostResource::can('update', $record)),
             ])
+            // The default row link would open "View on site" for a live post,
+            // because that action is named `view`. A row opens the page the
+            // person can use, the form to edit or the read-only copy.
+            ->recordUrl(fn (Post $record): string => PostResource::getUrl(
+                PostResource::can('update', $record) ? 'edit' : 'view',
+                ['record' => $record],
+            ))
             ->toolbarActions([
                 BulkActionGroup::make([
+                    // A bulk action only asks the policy's `deleteAny`, so
+                    // each post is checked as well. Without this a Writer
+                    // could select someone else's post and delete it.
                     DeleteBulkAction::make()
+                        ->authorizeIndividualRecords('delete')
                         ->modalDescription(function (Collection $records): string {
                             $live = $records->filter(fn (Post $post): bool => $post->status === PostStatus::Published);
 

@@ -28,9 +28,12 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            // No ->registration(). The one admin account is made with
-            // `php artisan make:filament-user`.
+            // No ->registration(). Accounts are made with
+            // `php artisan make:filament-user` and then given a role.
             ->login()
+            // A resource, page or action with no rule to ask throws, instead
+            // of quietly allowing everyone, which is what Filament does by default.
+            ->strictAuthorization()
             ->brandName('Konstelasi Blog')
             // The site's logo drawn inline, so it takes the text colour in
             // both themes. An <img> could not follow the theme.

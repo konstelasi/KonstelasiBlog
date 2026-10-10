@@ -18,7 +18,7 @@ class PostListTest extends TestCase
     {
         parent::setUp();
 
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
     }
 
     public function test_a_published_post_can_be_opened_on_the_site(): void

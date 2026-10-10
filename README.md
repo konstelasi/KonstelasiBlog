@@ -59,6 +59,8 @@ Every account has one role. Admin, Editor and Writer are defined in `app/Support
 | Publish, unpublish and set the date | no | yes | yes |
 | Manage accounts and roles | no | no | yes |
 
+Everyone can read every post. A Writer opens their own drafts to edit and everyone else's posts, and their own once they are live, in a read-only view, because changing a live post changes the public site. A post that was imported has no writer, so it is edited by Editors and Admins. An account with no role cannot sign in to the admin, and gets a 403 page if it tries.
+
 The accounts that existed when roles were added became Admins, so nobody was locked out. If every Admin is ever locked out, `php artisan rbac:assign <email> admin` over SSH brings one back.
 
 ## Importing the old posts
