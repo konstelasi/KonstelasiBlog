@@ -2,6 +2,9 @@
 
 namespace App\Support;
 
+use App\Models\User;
+use DomainException;
+use InvalidArgumentException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -74,6 +77,36 @@ final class Rbac
     public static function permissions(): array
     {
         return array_values(array_unique(array_merge(...array_values(self::table()))));
+    }
+
+    /**
+     * Give an account exactly one role. Every place that changes a role goes
+     * through here, so the rules hold for the Users screen and for
+     * `rbac:assign` alike: only a known role, and never the last Admin
+     * demoted, which would leave nobody to manage accounts.
+     *
+     * @throws InvalidArgumentException
+     * @throws DomainException
+     */
+    public static function assign(User $user, string $role): void
+    {
+        if (! in_array($role, self::ROLES, true)) {
+            throw new InvalidArgumentException("Unknown role \"{$role}\".");
+        }
+
+        if ($role !== self::ADMIN && self::isLastAdmin($user)) {
+            throw new DomainException('This is the last Admin. Make someone else an Admin first.');
+        }
+
+        // The role rows may not exist yet on a fresh install.
+        self::sync();
+        $user->syncRoles($role);
+    }
+
+    /** Whether this account is the only one with the Admin role. */
+    public static function isLastAdmin(User $user): bool
+    {
+        return $user->hasRole(self::ADMIN) && User::role(self::ADMIN)->count() === 1;
     }
 
     /**

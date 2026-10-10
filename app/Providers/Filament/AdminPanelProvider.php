@@ -31,6 +31,9 @@ class AdminPanelProvider extends PanelProvider
             // No ->registration(). Accounts are made with
             // `php artisan make:filament-user` and then given a role.
             ->login()
+            // Everyone can change their own password and email. A name
+            // change here renames their byline at the next rebuild.
+            ->profile()
             // A resource, page or action with no rule to ask throws, instead
             // of quietly allowing everyone, which is what Filament does by default.
             ->strictAuthorization()

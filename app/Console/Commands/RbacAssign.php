@@ -4,9 +4,11 @@ namespace App\Console\Commands;
 
 use App\Models\User;
 use App\Support\Rbac;
+use DomainException;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use InvalidArgumentException;
 
 /**
  * Also the way back in over SSH if every Admin is locked out, and the step
@@ -21,12 +23,6 @@ class RbacAssign extends Command
     {
         $role = (string) $this->argument('role');
 
-        if (! in_array($role, Rbac::ROLES, true)) {
-            $this->components->error("Unknown role \"{$role}\". Use ".implode(', ', Rbac::ROLES).'.');
-
-            return self::FAILURE;
-        }
-
         $user = User::where('email', $this->argument('email'))->first();
 
         if (! $user) {
@@ -35,9 +31,17 @@ class RbacAssign extends Command
             return self::FAILURE;
         }
 
-        // The role rows may not exist yet on a fresh install.
-        Rbac::sync();
-        $user->syncRoles($role);
+        try {
+            Rbac::assign($user, $role);
+        } catch (InvalidArgumentException) {
+            $this->components->error("Unknown role \"{$role}\". Use ".implode(', ', Rbac::ROLES).'.');
+
+            return self::FAILURE;
+        } catch (DomainException $e) {
+            $this->components->error($e->getMessage());
+
+            return self::FAILURE;
+        }
 
         $this->components->info("{$user->email} is now {$role}.");
 

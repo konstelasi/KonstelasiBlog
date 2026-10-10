@@ -61,6 +61,8 @@ Every account has one role. Admin, Editor and Writer are defined in `app/Support
 
 Everyone can read every post. A Writer opens their own drafts to edit and everyone else's posts, and their own once they are live, in a read-only view, because changing a live post changes the public site. A post that was imported has no writer, so it is edited by Editors and Admins. An account with no role cannot sign in to the admin, and gets a 403 page if it tries.
 
+Admins also get a Users item in the menu. It lists the accounts, creates one with a name, an email address, a password and a role, and lets an Admin change a role, reset a password or delete an account. The name is printed to readers as the author of that person's posts, so type it the way it should appear. The admin will not let you delete your own account, or delete or demote the last Admin. When an account is deleted its posts stay, with the name they had. Everyone can change their own name, email address and password from their name in the top corner.
+
 The accounts that existed when roles were added became Admins, so nobody was locked out. If every Admin is ever locked out, `php artisan rbac:assign <email> admin` over SSH brings one back.
 
 ## Importing the old posts

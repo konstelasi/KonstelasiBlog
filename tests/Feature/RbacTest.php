@@ -7,6 +7,7 @@ use App\Support\Rbac;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -109,6 +110,27 @@ class RbacTest extends TestCase
         $this->artisan('rbac:assign', ['email' => 'rani@example.com', 'role' => 'owner'])->assertFailed();
 
         $this->assertSame([], $user->fresh()->getRoleNames()->all());
+    }
+
+    public function test_rbac_assign_will_not_demote_the_last_admin(): void
+    {
+        $admin = User::factory()->admin()->create(['email' => 'damar@example.com']);
+
+        $this->artisan('rbac:assign', ['email' => 'damar@example.com', 'role' => 'editor'])->assertFailed();
+
+        $this->assertTrue($admin->fresh()->hasRole('admin'));
+
+        User::factory()->admin()->create();
+        $this->artisan('rbac:assign', ['email' => 'damar@example.com', 'role' => 'editor'])->assertSuccessful();
+    }
+
+    public function test_assign_refuses_an_unknown_role(): void
+    {
+        $user = User::factory()->writer()->create();
+
+        $this->expectException(InvalidArgumentException::class);
+
+        Rbac::assign($user, 'owner');
     }
 
     public function test_rbac_assign_rejects_an_unknown_email(): void
