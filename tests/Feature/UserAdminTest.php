@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\Profile;
 use App\Filament\Resources\Users\Pages\CreateUser;
 use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Models\Post;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
-use Filament\Auth\Pages\EditProfile;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
@@ -183,7 +183,7 @@ class UserAdminTest extends TestCase
         foreach (['writer', 'editor', 'admin'] as $role) {
             $this->actingAs(User::factory()->{$role}()->create());
 
-            Livewire::test(EditProfile::class)->assertSuccessful();
+            Livewire::test(Profile::class)->assertSuccessful();
         }
     }
 }

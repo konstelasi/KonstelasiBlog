@@ -61,9 +61,13 @@ Every account has one role. Admin, Editor and Writer are defined in `app/Support
 
 Everyone can read every post. A Writer opens their own drafts to edit and everyone else's posts, and their own once they are live, in a read-only view, because changing a live post changes the public site. A post that was imported has no writer, so it is edited by Editors and Admins. An account with no role cannot sign in to the admin, and gets a 403 page if it tries.
 
-Admins also get a Users item in the menu. It lists the accounts, creates one with a name, an email address, a password and a role, and lets an Admin change a role, reset a password or delete an account. The name is printed to readers as the author of that person's posts, so type it the way it should appear. The admin will not let you delete your own account, or delete or demote the last Admin. When an account is deleted its posts stay, with the name they had. Everyone can change their own name, email address and password from their name in the top corner.
+Admins also get a Users item in the menu. It lists the accounts, creates one with a name, an email address, a password and a role, and lets an Admin change a role, reset a password or delete an account. The name is printed to readers as the author of that person's posts, so type it the way it should appear. The admin will not let you delete your own account, or delete or demote the last Admin. When an account is deleted its posts stay, with the name they had.
 
 The accounts that existed when roles were added became Admins, so nobody was locked out. If every Admin is ever locked out, `php artisan rbac:assign <email> admin` over SSH brings one back.
+
+## Your profile
+
+Everyone has a profile page, from their name in the top corner. It shows your role (an Admin changes it) and lets you change your name, email address and password. Changing the email address or the password asks for your current password. A new name is printed on all your posts, so as you type it the page says how many posts that touches and how many of them are live, and saving starts a site rebuild when any is live.
 
 ## Importing the old posts
 
@@ -79,7 +83,7 @@ It matches posts by slug, so running it twice updates the same posts instead of 
 
 Sign in at `/admin` and open Posts. A post has a Publishing section (status, date, slug and the writer, which is filled in and can't be edited) and one tab per language with a title, a short description and a Markdown body. Images dropped into a body are stored on the server and linked from the Markdown. In the list, the EN and ID columns show a tick when that language has a title, a description and a body, so a draft that isn't ready to publish is easy to spot.
 
-The writer is the account that created the post, and readers see that account's name as the author, so each writer's account needs the name they want printed. Renaming an account renames it on their posts at the next rebuild. Posts that came in through the import keep the author text they were imported with, and so does a post whose writer's account is deleted.
+The writer is the account that created the post, and readers see that account's name as the author, so each writer's account needs the name they want printed. Renaming an account renames it on all their posts, and when any of them is live the admin starts a site rebuild at once so the new name appears in a few minutes. Posts that came in through the import keep the author text they were imported with, and so does a post whose writer's account is deleted.
 
 The slug comes from the English title and becomes the post's address, `konstelasi.co.id/blog/<slug>/`. Once a post is published the slug can't be changed, because that would break a live link. A published post has a "View on site" action in the list, which opens that address in a new tab (`SITE_URL` in `.env.example` says which site).
 

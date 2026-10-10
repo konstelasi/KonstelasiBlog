@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Profile;
 use App\Jobs\RebuildSite;
 use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
@@ -31,9 +32,9 @@ class AdminPanelProvider extends PanelProvider
             // No ->registration(). Accounts are made with
             // `php artisan make:filament-user` and then given a role.
             ->login()
-            // Everyone can change their own password and email. A name
-            // change here renames their byline at the next rebuild.
-            ->profile()
+            // Everyone's own page, with the role and a warning that a new
+            // name renames the author on their posts.
+            ->profile(Profile::class)
             // A resource, page or action with no rule to ask throws, instead
             // of quietly allowing everyone, which is what Filament does by default.
             ->strictAuthorization()
