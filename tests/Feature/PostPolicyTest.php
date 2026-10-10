@@ -121,8 +121,8 @@ class PostPolicyTest extends TestCase
     public function test_a_writer_cannot_edit_their_own_live_post(): void
     {
         $writer = User::factory()->writer()->create();
-        $this->actingAs($writer);
         $post = Post::factory()->published()->create(['user_id' => $writer->id]);
+        $this->actingAs($writer);
 
         Livewire::test(EditPost::class, ['record' => $post->getRouteKey()])->assertForbidden();
         Livewire::test(ViewPost::class, ['record' => $post->getRouteKey()])->assertSuccessful();
@@ -146,9 +146,9 @@ class PostPolicyTest extends TestCase
     public function test_a_row_opens_the_page_the_person_can_use(): void
     {
         $writer = User::factory()->writer()->create();
-        $this->actingAs($writer);
         $mine = Post::factory()->create(['user_id' => $writer->id]);
         $liveOfTheirs = Post::factory()->published()->create();
+        $this->actingAs($writer);
 
         $table = Livewire::test(ListPosts::class)->instance()->getTable();
 
@@ -159,10 +159,10 @@ class PostPolicyTest extends TestCase
     public function test_a_writer_cannot_delete_other_posts_in_bulk(): void
     {
         $writer = User::factory()->writer()->create();
-        $this->actingAs($writer);
         $mine = Post::factory()->create(['user_id' => $writer->id]);
         $theirs = Post::factory()->create();
         $live = Post::factory()->published()->create(['user_id' => $writer->id]);
+        $this->actingAs($writer);
 
         Livewire::test(ListPosts::class)
             ->selectTableRecords([$mine->getKey(), $theirs->getKey(), $live->getKey()])

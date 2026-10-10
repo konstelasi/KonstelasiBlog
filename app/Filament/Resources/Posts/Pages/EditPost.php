@@ -35,6 +35,22 @@ class EditPost extends EditRecord
     }
 
     /**
+     * Someone who may not publish never changes the status or the date, even
+     * if the browser sent them. Their own drafts stay drafts.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        if (auth()->user()->cannot('publish', Post::class)) {
+            unset($data['status'], $data['published_at']);
+        }
+
+        return $data;
+    }
+
+    /**
      * The Save button submits the form, which a confirmation modal can't
      * interrupt. So a save that would unpublish a live post stops here, asks
      * through `confirmUnpublishAction()`, and saves again once the writer agrees.

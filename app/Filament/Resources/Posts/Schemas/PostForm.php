@@ -37,11 +37,20 @@ class PostForm
                             ->required()
                             // Publishing makes every language field required, so the
                             // form has to know the moment the status changes.
-                            ->live(),
+                            ->live()
+                            // Only the UI. The create and edit pages and the post
+                            // observer enforce it, since form state can be sent by hand.
+                            ->disabled(fn (): bool => ! self::mayPublish())
+                            ->helperText(fn (): ?string => self::mayPublish()
+                                ? null
+                                : 'Only an Editor or an Admin can publish. Save your draft and ask one of them.'),
                         DateTimePicker::make('published_at')
                             ->label('Published')
                             ->seconds(false)
-                            ->helperText('Leave it empty and it takes the moment you publish.'),
+                            ->disabled(fn (): bool => ! self::mayPublish())
+                            ->helperText(fn (): string => self::mayPublish()
+                                ? 'Leave it empty and it takes the moment you publish.'
+                                : 'Set by an Editor or an Admin when they publish.'),
                         TextInput::make('slug')
                             ->required()
                             ->maxLength(255)
@@ -134,6 +143,12 @@ class PostForm
         $minutes = Post::readingMinutes($body);
 
         return sprintf('%s %s, about %d %s to read.', number_format($words), $words === 1 ? 'word' : 'words', $minutes, $minutes === 1 ? 'minute' : 'minutes');
+    }
+
+    /** Whether the signed-in account may set the status and the date. */
+    private static function mayPublish(): bool
+    {
+        return auth()->user()?->can('publish', Post::class) ?? false;
     }
 
     /** Whether the form is about to publish the post. */
