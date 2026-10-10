@@ -67,7 +67,11 @@ The accounts that existed when roles were added became Admins, so nobody was loc
 
 ## Your profile
 
-Everyone has a profile page, from their name in the top corner. It shows your role (an Admin changes it) and lets you change your name, email address and password. Changing the email address or the password asks for your current password. A new name is printed on all your posts, so as you type it the page says how many posts that touches and how many of them are live, and saving starts a site rebuild when any is live.
+Everyone has a profile page, from their name in the top corner. It has two tabs.
+
+Overview is your work at a glance. It counts your drafts, your live posts and the words you have written, lists the drafts of yours that still need a language finished, and lists your posts with the same tick marks as the Posts list. Editors and Admins also see other people's drafts that have both languages and are ready to publish. Under that it says what your role lets you do.
+
+Account shows your role (an Admin changes it) and lets you change your name, email address and password. Changing the email address or the password asks for your current password. A new name is printed on all your posts, so as you type it the page says how many posts that touches and how many of them are live, and saving starts a site rebuild when any is live.
 
 ## Importing the old posts
 

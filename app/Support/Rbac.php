@@ -42,6 +42,23 @@ final class Rbac
 
     public const USER_MANAGE = 'user.manage';
 
+    /**
+     * What each permission lets a person do, in the words the profile page
+     * uses. A new permission needs a sentence here (a test checks).
+     *
+     * @var array<string, string>
+     */
+    public const SENTENCES = [
+        self::POST_VIEW => 'Read every post.',
+        self::POST_CREATE => 'Start new posts.',
+        self::POST_UPDATE_OWN => 'Edit your own posts while they are drafts.',
+        self::POST_DELETE_OWN => 'Delete your own posts while they are drafts.',
+        self::POST_UPDATE_ANY => 'Edit any post, live ones too.',
+        self::POST_DELETE_ANY => 'Delete any post, live ones too.',
+        self::POST_PUBLISH => 'Publish and unpublish posts, and set their date.',
+        self::USER_MANAGE => 'Manage accounts and roles.',
+    ];
+
     /** @var list<string> */
     public const ROLES = [self::ADMIN, self::EDITOR, self::WRITER];
 

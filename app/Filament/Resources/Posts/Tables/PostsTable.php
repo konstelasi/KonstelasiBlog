@@ -19,32 +19,51 @@ use Illuminate\Database\Eloquent\Collection;
 
 class PostsTable
 {
+    /**
+     * The columns that say what a post is and whether it is ready: the
+     * title, the status and a tick for each complete language. The profile
+     * page's list of your own posts shows the same four.
+     *
+     * @return list<TextColumn|IconColumn>
+     */
+    public static function summaryColumns(bool $searchable = false): array
+    {
+        $title = TextColumn::make('title_en')
+            ->label('Title')
+            ->placeholder('Untitled')
+            ->description(fn (Post $record): string => $record->slug)
+            ->wrap();
+
+        if ($searchable) {
+            $title->searchable(['title_en', 'title_id', 'slug']);
+        }
+
+        return [
+            $title,
+            TextColumn::make('status')
+                ->badge(),
+            // A tick means the title, description and body are all written.
+            // Publishing needs both, so a draft with a grey cross is not ready.
+            IconColumn::make('has_en')
+                ->label('EN')
+                ->state(fn (Post $record): bool => $record->hasLanguage('en'))
+                ->boolean()
+                ->falseColor('gray')
+                ->alignCenter(),
+            IconColumn::make('has_id')
+                ->label('ID')
+                ->state(fn (Post $record): bool => $record->hasLanguage('id'))
+                ->boolean()
+                ->falseColor('gray')
+                ->alignCenter(),
+        ];
+    }
+
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('title_en')
-                    ->label('Title')
-                    ->placeholder('Untitled')
-                    ->searchable(['title_en', 'title_id', 'slug'])
-                    ->description(fn (Post $record): string => $record->slug)
-                    ->wrap(),
-                TextColumn::make('status')
-                    ->badge(),
-                // A tick means the title, description and body are all written.
-                // Publishing needs both, so a draft with a grey cross is not ready.
-                IconColumn::make('has_en')
-                    ->label('EN')
-                    ->state(fn (Post $record): bool => $record->hasLanguage('en'))
-                    ->boolean()
-                    ->falseColor('gray')
-                    ->alignCenter(),
-                IconColumn::make('has_id')
-                    ->label('ID')
-                    ->state(fn (Post $record): bool => $record->hasLanguage('id'))
-                    ->boolean()
-                    ->falseColor('gray')
-                    ->alignCenter(),
+                ...self::summaryColumns(searchable: true),
                 TextColumn::make('published_at')
                     ->label('Published')
                     ->date()
