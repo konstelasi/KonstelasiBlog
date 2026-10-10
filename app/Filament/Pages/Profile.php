@@ -50,6 +50,12 @@ class Profile extends EditProfile implements HasTable
                             ->schema([
                                 $this->getFormContentComponent(),
                             ]),
+                        Tab::make('Security')
+                            ->schema([
+                                // Filament's own set up, recovery codes and turn
+                                // off actions for the authenticator app.
+                                $this->getMultiFactorAuthenticationContentComponent(),
+                            ]),
                     ]),
             ]);
     }

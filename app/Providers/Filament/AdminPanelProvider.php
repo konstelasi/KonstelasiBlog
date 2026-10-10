@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\Profile;
 use App\Jobs\RebuildSite;
+use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -35,6 +36,14 @@ class AdminPanelProvider extends PanelProvider
             // Everyone's own page, with the role and a warning that a new
             // name renames the author on their posts.
             ->profile(Profile::class)
+            // Optional for everyone. A person turns it on from their profile,
+            // and an Admin can switch it off for a lost phone (the Users edit
+            // page, or `php artisan mfa:reset`). Recovery codes are shown once.
+            ->multiFactorAuthentication([
+                AppAuthentication::make()
+                    ->recoverable()
+                    ->brandName('Konstelasi Blog'),
+            ])
             // A resource, page or action with no rule to ask throws, instead
             // of quietly allowing everyone, which is what Filament does by default.
             ->strictAuthorization()

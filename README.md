@@ -67,11 +67,17 @@ The accounts that existed when roles were added became Admins, so nobody was loc
 
 ## Your profile
 
-Everyone has a profile page, from their name in the top corner. It has two tabs.
+Everyone has a profile page, from their name in the top corner. It has three tabs.
 
 Overview is your work at a glance. It counts your drafts, your live posts and the words you have written, lists the drafts of yours that still need a language finished, and lists your posts with the same tick marks as the Posts list. Editors and Admins also see other people's drafts that have both languages and are ready to publish. Under that it says what your role lets you do.
 
 Account shows your role (an Admin changes it) and lets you change your name, email address and password. Changing the email address or the password asks for your current password. A new name is printed on all your posts, so as you type it the page says how many posts that touches and how many of them are live, and saving starts a site rebuild when any is live.
+
+Security turns on two-factor sign-in, which is optional. With it on, signing in takes your password and then a six-digit code from an authenticator app such as Google Authenticator or Authy. Choose Set up, enter your current password, scan the QR code with the app, type the first code to confirm, and save the recovery codes that appear. They are shown once, each works one time in place of a code, and they are how you get in if you lose your phone.
+
+If you lose both the phone and the recovery codes, an Admin opens your account on the Users screen and chooses Turn off two-factor. If the only Admin is locked out, run `php artisan mfa:reset <email>` over SSH on the host. Either way you sign in with your password again and can set it up anew.
+
+The secrets and recovery codes are encrypted with the app's `APP_KEY`. Do not change that key while anyone uses two-factor, because their stored secrets would stop working. If it ever has to change, run `php artisan mfa:reset <email>` for each account first.
 
 ## Importing the old posts
 
