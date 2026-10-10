@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\User;
+use App\Support\Rbac;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -41,5 +42,29 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
         ]);
+    }
+
+    public function admin(): static
+    {
+        return $this->withRole(Rbac::ADMIN);
+    }
+
+    public function editor(): static
+    {
+        return $this->withRole(Rbac::EDITOR);
+    }
+
+    public function writer(): static
+    {
+        return $this->withRole(Rbac::WRITER);
+    }
+
+    /** Makes sure the roles exist, then gives the new account one of them. */
+    private function withRole(string $role): static
+    {
+        return $this->afterCreating(function (User $user) use ($role): void {
+            Rbac::sync();
+            $user->assignRole($role);
+        });
     }
 }

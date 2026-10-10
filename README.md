@@ -39,11 +39,27 @@ DB_CONNECTION=mariadb DB_DATABASE=konstelasi_blog_testing php artisan test
 
 ## Creating the admin account
 
-Nobody can sign up through the admin. The account is made from the command line, locally or on the host.
+Nobody can sign up through the admin. The account is made from the command line, locally or on the host, and then given a role.
 
 ```bash
 php artisan make:filament-user
+php artisan rbac:assign you@example.com admin
 ```
+
+## Roles
+
+Every account has one role. Admin, Editor and Writer are defined in `app/Support/Rbac.php`, and `php artisan rbac:sync` makes the database match that file after it changes.
+
+| | Writer | Editor | Admin |
+|---|---|---|---|
+| Read every post | yes | yes | yes |
+| Create a post | yes | yes | yes |
+| Edit or delete their own post, while it is a draft | yes | yes | yes |
+| Edit or delete anyone's post, live ones too | no | yes | yes |
+| Publish, unpublish and set the date | no | yes | yes |
+| Manage accounts and roles | no | no | yes |
+
+The accounts that existed when roles were added became Admins, so nobody was locked out. If every Admin is ever locked out, `php artisan rbac:assign <email> admin` over SSH brings one back.
 
 ## Importing the old posts
 
@@ -122,5 +138,5 @@ These steps happen once, in cPanel and on your own machine.
 4. In MySQL Databases, create a database and a user, and give the user all privileges on that database.
 5. Write `~/apps/blog/.env` on the host by hand, starting from `.env.example`. Set `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://blog.konstelasi.co.id`, the database details from step 4, and an `APP_KEY` made with `php artisan key:generate --show`. The deploy stops if this file is missing.
 6. Run `bash deploy.sh`.
-7. Over SSH, in `~/apps/blog`, create the admin account with `php artisan make:filament-user`. To bring the old posts over, copy the old Markdown posts up (the parent no longer has them, so check them out of its git history) and run `php artisan posts:import <that folder>`, or import locally and move the rows across.
+7. Over SSH, in `~/apps/blog`, create the admin account with `php artisan make:filament-user`, then give it the Admin role with `php artisan rbac:assign <email> admin`. To bring the old posts over, copy the old Markdown posts up (the parent no longer has them, so check them out of its git history) and run `php artisan posts:import <that folder>`, or import locally and move the rows across.
 8. Check that `https://blog.konstelasi.co.id/api/posts` answers, that `/admin` signs you in, and that an image uploaded into a post opens from its `/storage/...` address.
