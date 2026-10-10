@@ -81,6 +81,30 @@ Security also shows where you are signed in, with each browser, its address and 
 
 The secrets and recovery codes are encrypted with the app's `APP_KEY`. Do not change that key while anyone uses two-factor, because their stored secrets would stop working. If it ever has to change, run `php artisan mfa:reset <email>` for each account first.
 
+## Turning on email
+
+The admin sends mail for one thing, confirming an email change. Without a mailer an address change from the profile page takes effect at once and asks for the current password. With one, the new address is sent a link, the old address is sent a notice that can block the change, and the address changes only when the link is opened.
+
+It turns itself on whenever `MAIL_MAILER` is something other than `log` or `array`. We send through the company mailbox, `hello@konstelasi.co.id`, whose outgoing server is `mx3.mailspace.id` on port 465. Port 465 is TLS from the first byte, so the scheme is `smtps`. Only the outgoing settings matter, because the app sends and never reads mail. Put these in the `.env` of the machine, and ask the owner for the password.
+
+```
+MAIL_MAILER=smtp
+MAIL_SCHEME=smtps
+MAIL_HOST=mx3.mailspace.id
+MAIL_PORT=465
+MAIL_USERNAME=hello@konstelasi.co.id
+MAIL_PASSWORD=
+MAIL_FROM_ADDRESS=hello@konstelasi.co.id
+MAIL_FROM_NAME="Konstelasi Blog"
+QUEUE_CONNECTION=sync
+```
+
+`QUEUE_CONNECTION=sync` matters. These mails are queued, and the host runs no queue worker, so with the default `database` queue they would wait in the `jobs` table forever. With `sync` they are sent while the page saves, which costs a second or two and makes a save fail with an error if the mail server cannot be reached, instead of losing the mail. A failed save leaves the address unchanged. The site rebuild after a post change is not affected.
+
+On the host, add the same lines to `~/apps/blog/.env` over SSH, because `deploy.sh` never ships `.env`, then run `php artisan config:cache`. The password lives only in `.env` files, which git ignores. Never put it in `.env.example`, this README, a commit or a workflow, because the repository is public.
+
+To check it, change your email address to one you can read. A message should arrive from `hello@konstelasi.co.id`, and the address on your profile changes after you open the link in it. If it lands in spam, check the mailbox's SPF and DKIM records with the mail provider.
+
 ## Importing the old posts
 
 The two posts from the old WordPress site were kept as Markdown in the parent repo, one file per language, and have been imported once into the live database. The Markdown files were then removed from the parent, so they exist only in its git history. This command reads a folder of that shape into the database as published posts.

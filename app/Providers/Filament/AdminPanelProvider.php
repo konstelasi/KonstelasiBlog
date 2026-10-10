@@ -36,6 +36,11 @@ class AdminPanelProvider extends PanelProvider
             // Everyone's own page, with the role and a warning that a new
             // name renames the author on their posts.
             ->profile(Profile::class)
+            // Changing an email address mails a link to the new address, and
+            // a notice with a block link to the old one. It is on whenever a
+            // real mailer is set, so a checkout with `MAIL_MAILER=log` still
+            // changes the address at once, with the current password.
+            ->emailChangeVerification(fn (): bool => ! in_array(config('mail.default'), ['log', 'array'], true))
             // Optional for everyone. A person turns it on from their profile,
             // and an Admin can switch it off for a lost phone (the Users edit
             // page, or `php artisan mfa:reset`). Recovery codes are shown once.
