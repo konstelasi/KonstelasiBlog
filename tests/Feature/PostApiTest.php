@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Post;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -46,6 +47,31 @@ class PostApiTest extends TestCase
                     'body' => $post->body_id,
                 ],
             ]]);
+    }
+
+    public function test_the_author_is_the_writers_account_name(): void
+    {
+        $writer = User::factory()->create(['name' => 'Rani Putri']);
+        Post::factory()->published()->create(['user_id' => $writer->id, 'author' => 'Stale Name']);
+
+        $this->getJson('/api/posts')->assertJsonPath('0.author', 'Rani Putri');
+
+        $writer->update(['name' => 'Rani Kusuma']);
+
+        $this->getJson('/api/posts')->assertJsonPath('0.author', 'Rani Kusuma');
+    }
+
+    public function test_a_post_without_a_writer_keeps_its_stored_author(): void
+    {
+        $writer = User::factory()->create(['name' => 'Rani Putri']);
+        Post::factory()->published()->create(['user_id' => $writer->id, 'author' => 'Rani Putri']);
+        Post::factory()->published('2020-01-01 00:00:00')->create(['author' => 'An Imported Name']);
+
+        $writer->delete();
+
+        $this->getJson('/api/posts')
+            ->assertJsonPath('0.author', 'Rani Putri')
+            ->assertJsonPath('1.author', 'An Imported Name');
     }
 
     public function test_an_empty_blog_is_an_empty_array(): void

@@ -56,11 +56,16 @@ class PostForm
                             ->helperText(fn (?Post $record): string => $record?->slugIsLocked()
                                 ? 'Locked, because the post is live at this address.'
                                 : 'Filled in from the English title. It becomes the URL, so check it before you publish.'),
+                        // Never typed. A new post takes the name of the account that
+                        // creates it (see CreatePost), and the public byline follows
+                        // that account's name. Imported posts show their stored text.
                         TextInput::make('author')
-                            ->required()
-                            ->maxLength(255)
-                            ->default(Post::DEFAULT_AUTHOR)
-                            ->rules([HouseStyle::text()]),
+                            ->label('Written by')
+                            ->default(fn (): string => auth()->user()?->name ?? Post::DEFAULT_AUTHOR)
+                            ->formatStateUsing(fn (?Post $record, ?string $state): ?string => $record?->byline() ?? $state)
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->helperText('Taken from the account that created the post, and shown to readers as the author.'),
                     ]),
                 Tabs::make('Languages')
                     ->tabs(array_map(

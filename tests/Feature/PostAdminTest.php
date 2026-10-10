@@ -30,7 +30,6 @@ class PostAdminTest extends TestCase
     {
         return [
             'slug' => 'a-clean-post',
-            'author' => 'Damar Maulana',
             'title_en' => 'A clean post',
             'description_en' => 'One sentence about it.',
             'body_en' => "## A heading\n\nSome text.",
@@ -38,6 +37,51 @@ class PostAdminTest extends TestCase
             'description_id' => 'Satu kalimat tentangnya.',
             'body_id' => "## Sebuah judul\n\nSedikit teks.",
         ];
+    }
+
+    public function test_a_new_post_is_written_by_whoever_is_signed_in(): void
+    {
+        $writer = User::factory()->create(['name' => 'Rani Putri']);
+        $this->actingAs($writer);
+
+        Livewire::test(CreatePost::class)
+            ->assertFormFieldDisabled('author')
+            ->assertSchemaStateSet(['author' => 'Rani Putri'])
+            ->fillForm([...$this->complete(), 'author' => 'Someone Else'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $post = Post::sole();
+        $this->assertSame($writer->id, $post->user_id);
+        $this->assertSame('Rani Putri', $post->author);
+        $this->assertSame('Rani Putri', $post->byline());
+    }
+
+    public function test_editing_a_post_keeps_its_writer(): void
+    {
+        $writer = User::factory()->create(['name' => 'Rani Putri']);
+        $post = Post::factory()->create(['user_id' => $writer->id, 'author' => 'Rani Putri']);
+        $editor = User::factory()->create(['name' => 'Budi Santoso']);
+        $this->actingAs($editor);
+
+        Livewire::test(EditPost::class, ['record' => $post->getRouteKey()])
+            ->assertSchemaStateSet(['author' => 'Rani Putri'])
+            ->fillForm(['title_en' => 'Edited by someone else', 'author' => 'Budi Santoso'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $post->refresh();
+        $this->assertSame('Edited by someone else', $post->title_en);
+        $this->assertSame($writer->id, $post->user_id);
+        $this->assertSame('Rani Putri', $post->byline());
+    }
+
+    public function test_an_imported_post_shows_its_stored_author(): void
+    {
+        $post = Post::factory()->create(['author' => 'An Imported Name']);
+
+        Livewire::test(EditPost::class, ['record' => $post->getRouteKey()])
+            ->assertSchemaStateSet(['author' => 'An Imported Name']);
     }
 
     public function test_a_complete_post_can_be_published(): void

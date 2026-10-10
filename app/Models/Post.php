@@ -11,9 +11,10 @@ use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'slug', 'status', 'published_at', 'author',
+    'slug', 'status', 'published_at', 'author', 'user_id',
     'title_en', 'description_en', 'body_en',
     'title_id', 'description_id', 'body_id',
 ])]
@@ -69,6 +70,23 @@ class Post extends Model
         }
 
         return $columns;
+    }
+
+    /** The account that wrote the post, if it was written in the admin. */
+    public function writer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
+     * The name shown to readers. A post written in the admin takes its
+     * writer's current account name, so the byline can't drift from the
+     * account. Imported posts, and posts whose writer's account is gone, keep
+     * the `author` text stored with them.
+     */
+    public function byline(): string
+    {
+        return $this->writer?->name ?: $this->author;
     }
 
     /**

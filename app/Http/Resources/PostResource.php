@@ -19,7 +19,7 @@ class PostResource extends JsonResource
         $post = [
             'slug' => $this->slug,
             'published_at' => $this->published_at?->toIso8601String(),
-            'author' => $this->author,
+            'author' => $this->byline(),
         ];
 
         foreach (Post::LANGUAGES as $lang) {
