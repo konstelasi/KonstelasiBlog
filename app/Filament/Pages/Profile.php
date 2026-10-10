@@ -5,12 +5,17 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\Posts\PostResource;
 use App\Filament\Resources\Posts\Tables\PostsTable;
 use App\Models\Post;
+use App\Support\BrowserSessions;
 use App\Support\ProfileOverview;
 use Filament\Actions\Action;
 use Filament\Auth\Pages\EditProfile;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
@@ -55,9 +60,62 @@ class Profile extends EditProfile implements HasTable
                                 // Filament's own set up, recovery codes and turn
                                 // off actions for the authenticator app.
                                 $this->getMultiFactorAuthenticationContentComponent(),
+                                $this->getBrowserSessionsComponent(),
                             ]),
                     ]),
             ]);
+    }
+
+    /**
+     * Where the account is signed in, and a button to end the others. Left
+     * out unless sessions are kept in the database, because any other driver
+     * would give a list that is wrong.
+     */
+    private function getBrowserSessionsComponent(): Component
+    {
+        return Section::make('Where you are signed in')
+            ->description('Each browser that has signed in to your account and has not been idle for too long.')
+            ->compact()
+            ->visible(fn (): bool => BrowserSessions::isAvailable())
+            ->schema([
+                View::make('filament.profile.sessions')
+                    ->viewData(fn (): array => ['sessions' => $this->browserSessions()->all()]),
+                Actions::make([$this->signOutOthersAction()])->key('sessionActions'),
+            ]);
+    }
+
+    private function signOutOthersAction(): Action
+    {
+        return Action::make('signOutOthers')
+            ->label('Sign out other browsers')
+            ->icon(Heroicon::OutlinedArrowRightOnRectangle)
+            ->color('gray')
+            ->visible(fn (): bool => BrowserSessions::isAvailable() && $this->browserSessions()->hasOthers())
+            ->modalHeading('Sign out other browsers?')
+            ->modalDescription('Every other browser signed in to your account is signed out. This one stays signed in. Enter your password to confirm.')
+            ->modalSubmitActionLabel('Sign out other browsers')
+            ->schema([
+                TextInput::make('password')
+                    ->label('Current password')
+                    ->password()
+                    ->revealable()
+                    ->autocomplete('current-password')
+                    ->required()
+                    ->currentPassword(guard: Filament::getAuthGuard()),
+            ])
+            ->action(function (): void {
+                $ended = $this->browserSessions()->signOutOthers();
+
+                Notification::make()
+                    ->success()
+                    ->title($ended === 1 ? 'Signed out 1 other browser' : "Signed out {$ended} other browsers")
+                    ->send();
+            });
+    }
+
+    private function browserSessions(): BrowserSessions
+    {
+        return new BrowserSessions($this->getUser(), session()->getId());
     }
 
     /** The person's own posts, with the same ticks as the Posts list. */

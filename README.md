@@ -77,6 +77,8 @@ Security turns on two-factor sign-in, which is optional. With it on, signing in 
 
 If you lose both the phone and the recovery codes, an Admin opens your account on the Users screen and chooses Turn off two-factor. If the only Admin is locked out, run `php artisan mfa:reset <email>` over SSH on the host. Either way you sign in with your password again and can set it up anew.
 
+Security also shows where you are signed in, with each browser, its address and when it was last used, and marks the one you are on. Sign out other browsers, after your password, ends every other sign-in of your account, which is the thing to do if you forgot to sign out on a shared computer.
+
 The secrets and recovery codes are encrypted with the app's `APP_KEY`. Do not change that key while anyone uses two-factor, because their stored secrets would stop working. If it ever has to change, run `php artisan mfa:reset <email>` for each account first.
 
 ## Importing the old posts
