@@ -100,6 +100,40 @@ class BrowserSessionsTest extends TestCase
         $this->assertDatabaseHas('sessions', ['id' => session()->getId()]);
     }
 
+    public function test_signing_out_others_also_replaces_the_remember_token(): void
+    {
+        $me = User::factory()->writer()->create(['remember_token' => 'the-old-remember-token']);
+        $this->addSession('mine-here', $me);
+        $this->addSession('mine-phone', $me);
+
+        (new BrowserSessions($me, 'mine-here'))->signOutOthers();
+
+        $this->assertNotSame('the-old-remember-token', $me->fresh()->getRememberToken());
+        $this->assertSame(60, strlen($me->fresh()->getRememberToken()));
+    }
+
+    public function test_guessing_the_password_is_limited_to_five_tries_a_minute(): void
+    {
+        $me = User::factory()->writer()->create();
+        $this->actingAs($me);
+        $this->addSession(session()->getId(), $me);
+        $this->addSession('mine-phone', $me, self::IPHONE);
+
+        $page = Livewire::test(Profile::class);
+
+        foreach (range(1, 5) as $try) {
+            $page->callAction($this->signOutOthers(), ['password' => "guess-{$try}"])
+                ->assertHasActionErrors(['password']);
+        }
+
+        // The sixth try has the right password and is still refused, so the
+        // limit cannot be used to tell a right guess from a wrong one.
+        $page->callAction($this->signOutOthers(), ['password' => 'password'])
+            ->assertHasActionErrors(['password']);
+
+        $this->assertDatabaseHas('sessions', ['id' => 'mine-phone']);
+    }
+
     public function test_there_is_nothing_to_sign_out_when_this_is_the_only_browser(): void
     {
         $me = User::factory()->writer()->create();

@@ -25,7 +25,9 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Everyone's own page. It extends Filament's `EditProfile`, so the rate
@@ -103,7 +105,22 @@ class Profile extends EditProfile implements HasTable
                     ->required()
                     ->currentPassword(guard: Filament::getAuthGuard()),
             ])
+            // The password box would otherwise let someone at an unlocked
+            // browser test guesses without limit, so five tries a minute.
+            ->beforeFormValidated(function (): void {
+                $key = $this->signOutThrottleKey();
+
+                if (RateLimiter::tooManyAttempts($key, 5)) {
+                    throw ValidationException::withMessages([
+                        $this->getSchema($this->getMountedActionSchemaName())->getComponent('password')->getStatePath() => 'Too many attempts. Try again in a minute.',
+                    ]);
+                }
+
+                RateLimiter::hit($key, 60);
+            })
             ->action(function (): void {
+                RateLimiter::clear($this->signOutThrottleKey());
+
                 $ended = $this->browserSessions()->signOutOthers();
 
                 Notification::make()
@@ -111,6 +128,11 @@ class Profile extends EditProfile implements HasTable
                     ->title($ended === 1 ? 'Signed out 1 other browser' : "Signed out {$ended} other browsers")
                     ->send();
             });
+    }
+
+    private function signOutThrottleKey(): string
+    {
+        return 'profile-sign-out-others:'.$this->getUser()->getKey();
     }
 
     private function browserSessions(): BrowserSessions

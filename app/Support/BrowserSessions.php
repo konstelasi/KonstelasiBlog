@@ -7,6 +7,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * The browsers an account is signed in on, read from the `sessions` table,
@@ -62,12 +63,23 @@ class BrowserSessions
         return $this->all()->contains(fn (array $session): bool => ! $session['current']);
     }
 
-    /** Ends every session of this account except the one in use. Returns how many ended. */
+    /**
+     * Ends every session of this account except the one in use, and returns
+     * how many ended. A browser that ticked "remember me" would sign itself
+     * straight back in from its cookie, so the remember token is replaced as
+     * well. That also drops the remember cookie of this browser, which stays
+     * signed in through its session until it expires.
+     */
     public function signOutOthers(): int
     {
-        return $this->table()
+        $ended = $this->table()
             ->where('user_id', $this->user->getKey())
             ->where('id', '!=', $this->currentId)
             ->delete();
+
+        $this->user->setRememberToken(Str::random(60));
+        $this->user->save();
+
+        return $ended;
     }
 }
