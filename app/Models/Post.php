@@ -30,6 +30,9 @@ class Post extends Model
     /** The fields each language needs, as column name prefixes. */
     public const LANGUAGE_FIELDS = ['title', 'description', 'body'];
 
+    /** How each language is named in the admin. */
+    public const LANGUAGE_NAMES = ['en' => 'English', 'id' => 'Indonesian'];
+
     public const DEFAULT_AUTHOR = 'Damar Maulana';
 
     protected $attributes = [
@@ -112,6 +115,21 @@ class Post extends Model
         }
 
         return true;
+    }
+
+    /**
+     * The names of the languages this post is not complete in, in the order
+     * of `LANGUAGES`. Empty when it could be published.
+     *
+     * @return list<string>
+     */
+    public function missingLanguages(): array
+    {
+        return collect(self::LANGUAGES)
+            ->reject(fn (string $lang): bool => $this->hasLanguage($lang))
+            ->map(fn (string $lang): string => self::LANGUAGE_NAMES[$lang])
+            ->values()
+            ->all();
     }
 
     /** Where the post lives on the public website. English is at the root, Indonesian under `/id/`. */

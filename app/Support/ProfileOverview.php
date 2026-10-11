@@ -15,8 +15,6 @@ use Illuminate\Support\Str;
  */
 class ProfileOverview
 {
-    private const LANGUAGE_NAMES = ['en' => 'English', 'id' => 'Indonesian'];
-
     /** How many rows each list on the page shows at most. */
     private const LIMIT = 8;
 
@@ -54,7 +52,7 @@ class ProfileOverview
     public function incompleteDrafts(): Collection
     {
         return $this->own()->where('status', PostStatus::Draft)->latest('updated_at')->get()
-            ->map(fn (Post $post): array => ['post' => $post, 'missing' => $this->missing($post)])
+            ->map(fn (Post $post): array => ['post' => $post, 'missing' => $post->missingLanguages()])
             ->filter(fn (array $row): bool => $row['missing'] !== [])
             ->take(self::LIMIT)
             ->values();
@@ -77,7 +75,7 @@ class ProfileOverview
             ->where(fn (Builder $query) => $query->whereNull('user_id')->orWhere('user_id', '!=', $this->user->getKey()))
             ->latest('updated_at')
             ->get()
-            ->filter(fn (Post $post): bool => $this->missing($post) === [])
+            ->filter(fn (Post $post): bool => $post->missingLanguages() === [])
             ->take(self::LIMIT)
             ->values();
     }
@@ -144,15 +142,5 @@ class ProfileOverview
     public static function nextStep(array $missing): string
     {
         return count($missing) === 1 ? 'Finish '.$missing[0] : 'Open draft';
-    }
-
-    /** @return list<string> the names of the languages the post is not complete in */
-    private function missing(Post $post): array
-    {
-        return collect(Post::LANGUAGES)
-            ->reject(fn (string $lang): bool => $post->hasLanguage($lang))
-            ->map(fn (string $lang): string => self::LANGUAGE_NAMES[$lang])
-            ->values()
-            ->all();
     }
 }
