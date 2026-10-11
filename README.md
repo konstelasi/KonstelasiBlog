@@ -65,6 +65,12 @@ Admins also get a Users item in the menu. It lists the accounts, creates one wit
 
 The accounts that existed when roles were added became Admins, so nobody was locked out. If every Admin is ever locked out, `php artisan rbac:assign <email> admin` over SSH brings one back.
 
+## The dashboard
+
+The page you land on after signing in shows the state of the whole blog. A ruled line gives the live posts, the drafts, the words that are live in both languages and when something was last published. Under it, a list of drafts that need someone. Editors and Admins see every complete draft waiting for review, the one that has waited longest first, and every draft that misses a language. A Writer sees only their own drafts that miss a language. Next to it, a small chart shows how many posts went live in each of the last 12 months.
+
+Editors and Admins also see when the public site was last asked to rebuild, with a link to the builds on GitHub. That time is when GitHub accepted the request, not when the build finished, so open the link to see the result. A request that fails has its own warning at the top of every page. Admins also see how many accounts use two-factor sign-in and which ones do not, since only the owner of an account can turn it on.
+
 ## Your profile
 
 Everyone has a profile page, from their name in the top corner. The page has a list of three sections on the left, Overview, Account and Security, and shows one at a time. The address remembers which, so a reload stays where you were.

@@ -716,3 +716,105 @@ html.dark {
         white-space: nowrap;
     }
 }
+
+/* Dashboard. The ruled figures, lists and links are the `.profile-*` rules
+   above. Only what the profile page does not have is here. */
+.dash-when {
+    font-size: 1.25rem;
+    padding-top: 0.55rem;
+}
+
+.dash-needs .dash-block:first-child {
+    margin-top: 0;
+}
+
+.dash-rhythm h2,
+.dash-twofactor h2 {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.dash-bars {
+    display: flex;
+    gap: 0.25rem;
+    margin: 0.9rem 0 0;
+    padding: 0;
+    border-bottom: 1px solid var(--border);
+    list-style: none;
+}
+
+.dash-bars li {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    min-width: 0;
+    height: 8.5rem;
+}
+
+.dash-count {
+    margin-bottom: 0.2rem;
+    color: var(--p-dim);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.dash-bar {
+    /* A month with no posts still leaves a hairline, so the row reads as 12. */
+    width: 100%;
+    min-height: 2px;
+    height: calc(5.5rem * var(--n) / var(--max));
+    background: var(--p-faint);
+    border-radius: 2px 2px 0 0;
+}
+
+.dash-month {
+    margin-top: 0.3rem;
+    color: var(--p-faint);
+    font-size: 0.6875rem;
+}
+
+.dash-bars + .dash-bars {
+    margin-top: 0;
+}
+
+.dash-line {
+    margin: 0;
+    padding: 0.85rem 0;
+    border-block: 1px solid var(--border);
+    color: var(--p-dim);
+}
+
+.dash-line .profile-act {
+    margin-inline-start: 0.5rem;
+}
+
+.dash-plain {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.dash-plain li {
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--p-hair);
+}
+
+.dash-plain small {
+    margin-inline-start: 0.4rem;
+    color: var(--p-faint);
+}
+
+@media (max-width: 30rem) {
+    /* Twelve month names do not fit in a phone's width, so every other one
+       is kept. The hidden ones stay in the page for a screen reader. */
+    .dash-bars li:nth-child(even) .dash-month {
+        color: transparent;
+    }
+
+    .dash-bars {
+        gap: 0.125rem;
+    }
+}
