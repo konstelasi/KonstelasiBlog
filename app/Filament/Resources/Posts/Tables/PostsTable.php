@@ -73,6 +73,10 @@ class PostsTable
         return $table
             ->columns([
                 ...self::summaryColumns(searchable: true),
+                TextColumn::make('tags.name_en')
+                    ->label('Tags')
+                    ->placeholder('None')
+                    ->visibleFrom('lg'),
                 TextColumn::make('published_at')
                     ->label('Published')
                     ->date()
@@ -88,6 +92,10 @@ class PostsTable
             ->filters([
                 SelectFilter::make('status')
                     ->options(PostStatus::class),
+                SelectFilter::make('tags')
+                    ->relationship('tags', 'name_en')
+                    ->multiple()
+                    ->preload(),
             ])
             ->recordActions([
                 // Only a published post has an address to open.

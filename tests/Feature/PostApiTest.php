@@ -36,6 +36,7 @@ class PostApiTest extends TestCase
                 'slug' => $post->slug,
                 'published_at' => '2026-04-07T00:00:00+00:00',
                 'author' => 'Damar Maulana',
+                'tags' => [],
                 'en' => [
                     'title' => $post->title_en,
                     'description' => $post->description_en,

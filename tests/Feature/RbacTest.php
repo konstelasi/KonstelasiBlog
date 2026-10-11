@@ -21,7 +21,7 @@ class RbacTest extends TestCase
     public static function roles(): array
     {
         $writer = ['post.view', 'post.create', 'post.update.own', 'post.delete.own'];
-        $editor = [...$writer, 'post.update.any', 'post.publish', 'post.delete.any'];
+        $editor = [...$writer, 'post.update.any', 'post.publish', 'post.delete.any', 'tag.manage'];
 
         return [
             'writer' => ['writer', $writer],

@@ -15,7 +15,7 @@ class PostController extends Controller
     public function index(): PostCollection
     {
         return new PostCollection(
-            Post::query()->published()->with('writer')->orderByDesc('published_at')->orderByDesc('id')->get(),
+            Post::query()->published()->with(['writer', 'tags' => fn ($tags) => $tags->orderBy('name_en')])->orderByDesc('published_at')->orderByDesc('id')->get(),
         );
     }
 }

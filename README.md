@@ -57,6 +57,8 @@ Every account has one role. Admin, Editor and Writer are defined in `app/Support
 | Edit or delete their own post, while it is a draft | yes | yes | yes |
 | Edit or delete anyone's post, live ones too | no | yes | yes |
 | Publish, unpublish and set the date | no | yes | yes |
+| Pick tags on a post | yes | yes | yes |
+| Create, rename and delete tags | no | yes | yes |
 | Manage accounts and roles | no | no | yes |
 
 Everyone can read every post. A Writer opens their own drafts to edit and everyone else's posts, and their own once they are live, in a read-only view, because changing a live post changes the public site. A post that was imported has no writer, so it is edited by Editors and Admins. An account with no role cannot sign in to the admin, and gets a 403 page if it tries.
@@ -127,6 +129,8 @@ Sign in at `/admin` and open Posts. A post has a Publishing section (status, dat
 
 The writer is the account that created the post, and readers see that account's name as the author, so each writer's account needs the name they want printed. Renaming an account renames it on all their posts, and when any of them is live the admin starts a site rebuild at once so the new name appears in a few minutes. Posts that came in through the import keep the author text they were imported with, and so does a post whose writer's account is deleted.
 
+A post can carry up to six tags, picked in the Tags section above the language tabs. A tag belongs to the post as a whole, so the English and the Indonesian page show the same tags, each in its own language. Editors and Admins keep the list under Tags in the menu. A tag has an English name, an Indonesian name and a slug that comes from the English name. The slug is the address of the tag page, `konstelasi.co.id/blog/tag/<slug>/` and `/id/blog/tag/<slug>/`, so it locks once a live post carries the tag. The website builds a tag page only when two live posts carry the tag, and the list shows how many live posts each tag has. A Writer picks from the existing tags and asks an Editor for a missing one, while an Editor or an Admin can also add a tag from the post form. Renaming or deleting a tag that a live post carries starts a site rebuild, the same as editing that post.
+
 The slug comes from the English title and becomes the post's address, `konstelasi.co.id/blog/<slug>/`. Once a post is published the slug can't be changed, because that would break a live link. A published post has a "View on site" action in the list, which opens that address in a new tab (`SITE_URL` in `.env.example` says which site).
 
 The admin checks the house writing style as you save. It rejects an em dash or an en dash in any field, a hyphen with a space on each side standing in for one, and a colon or semicolon in a title or a Markdown heading. It also rejects an image with no alt text, so write a short description between the square brackets of `![](...)`. Each message gives the line and quotes the words around the problem, so it can be found without counting lines.
@@ -147,13 +151,14 @@ That needs `GITHUB_DISPATCH_TOKEN` in the host's `.env`, a fine-grained GitHub t
     "slug": "stars-align-starcore-reaches-stability-with-v0-2-0",
     "published_at": "2025-12-24T00:00:00+00:00",
     "author": "Damar Maulana",
+    "tags": [{ "slug": "open-source", "en": "Open source", "id": "Open source" }],
     "en": { "title": "...", "description": "...", "body": "..." },
     "id": { "title": "...", "description": "...", "body": "..." }
   }
 ]
 ```
 
-It needs no key, since everything in it is public on the site anyway. Drafts never appear in it. Like any Laravel API it allows 60 requests a minute from one address.
+`tags` is an empty array for a post without tags, and its entries are in alphabetical order of the English name. It needs no key, since everything in it is public on the site anyway. Drafts never appear in it. Like any Laravel API it allows 60 requests a minute from one address.
 
 ## Deploying
 

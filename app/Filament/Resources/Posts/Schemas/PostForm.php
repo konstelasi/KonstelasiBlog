@@ -3,10 +3,14 @@
 namespace App\Filament\Resources\Posts\Schemas;
 
 use App\Enums\PostStatus;
+use App\Filament\Resources\Tags\Schemas\TagForm;
 use App\Models\Post;
+use App\Models\Tag;
 use App\Rules\HouseStyle;
+use App\Support\Rbac;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\MarkdownEditor;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ToggleButtons;
@@ -75,6 +79,27 @@ class PostForm
                             ->disabled()
                             ->dehydrated(false)
                             ->helperText('Taken from the account that created the post, and shown to readers as the author.'),
+                    ]),
+                Section::make('Tags')
+                    ->schema([
+                        // Both languages share the tags, each tag having a name in
+                        // each. Not required, since a post reads fine without any.
+                        Select::make('tags')
+                            ->label('Tags')
+                            ->relationship('tags', 'name_en')
+                            ->getOptionLabelFromRecordUsing(fn (Tag $tag): string => $tag->name_en === $tag->name_id
+                                ? $tag->name_en
+                                : "{$tag->name_en} / {$tag->name_id}")
+                            ->multiple()
+                            ->preload()
+                            ->searchable(['name_en', 'name_id'])
+                            ->maxItems(6)
+                            // A new tag is a decision about the vocabulary of the
+                            // site, so only a person who manages tags may add one here.
+                            ->createOptionForm(self::mayManageTags() ? TagForm::fields() : null)
+                            ->helperText(self::mayManageTags()
+                                ? 'Up to six. A tag gets its own page on the site once two live posts carry it.'
+                                : 'Up to six. Ask an Editor or an Admin if a tag is missing.'),
                     ]),
                 Tabs::make('Languages')
                     ->tabs(array_map(
@@ -149,6 +174,12 @@ class PostForm
     private static function mayPublish(): bool
     {
         return auth()->user()?->can('publish', Post::class) ?? false;
+    }
+
+    /** Whether the signed-in account may add tags from the post form. */
+    private static function mayManageTags(): bool
+    {
+        return auth()->user()?->can(Rbac::TAG_MANAGE) ?? false;
     }
 
     /** Whether the form is about to publish the post. */
