@@ -70,15 +70,15 @@
             <div class="profile-tablewrap">
                 <table class="profile-table">
                     <thead>
-                        <tr><th>Title</th><th>Status</th><th>EN</th><th>ID</th><th><span class="sr-only">Open</span></th></tr>
+                        <tr><th>Title</th><th>Status</th><th class="profile-col-lang">EN</th><th class="profile-col-lang">ID</th><th><span class="sr-only">Open</span></th></tr>
                     </thead>
                     <tbody>
                         @foreach ($posts as $post)
                             <tr>
                                 <td>{{ $post->title_en ?: 'Untitled' }}</td>
                                 <td><span @class(['profile-status', 'is-live' => $post->status === PostStatus::Published])>{{ $post->status === PostStatus::Published ? 'Live' : 'Draft' }}</span></td>
-                                <td><span @class(['profile-lang', 'is-ok' => $post->hasLanguage('en')])>EN</span></td>
-                                <td><span @class(['profile-lang', 'is-ok' => $post->hasLanguage('id')])>ID</span></td>
+                                <td class="profile-col-lang"><span @class(['profile-lang', 'is-ok' => $post->hasLanguage('en')])>EN</span></td>
+                                <td class="profile-col-lang"><span @class(['profile-lang', 'is-ok' => $post->hasLanguage('id')])>ID</span></td>
                                 <td>
                                     @if (PostResource::can('update', $post))
                                         <a class="profile-act" href="{{ PostResource::getUrl('edit', ['record' => $post]) }}">Edit</a>

@@ -8,6 +8,7 @@ use Database\Factories\UserFactory;
 use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
 use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
 use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasAvatar;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -16,13 +17,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 use SensitiveParameter;
 use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token', 'app_authentication_secret', 'app_authentication_recovery_codes'])]
 #[ObservedBy(UserObserver::class)]
-class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery
+class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasAvatar
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, Notifiable;
@@ -48,6 +50,29 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
             'app_authentication_secret' => 'encrypted',
             'app_authentication_recovery_codes' => 'encrypted:array',
         ];
+    }
+
+    /** The first letters of the first two words of the name, as the profile page shows them. */
+    public function initials(): string
+    {
+        return Str::of($this->name)->explode(' ')->filter()->take(2)
+            ->map(fn (string $word): string => Str::upper(Str::substr($word, 0, 1)))
+            ->implode('');
+    }
+
+    /**
+     * The picture in the top bar and the account widget, drawn here as a grey
+     * disc with the initials. Filament's default asks ui-avatars.com, which
+     * sends every writer's name to a third party and paints the disc in the
+     * panel's darkest grey, so in dark mode it vanishes into the page.
+     */
+    public function getFilamentAvatarUrl(): ?string
+    {
+        $initials = htmlspecialchars($this->initials(), ENT_QUOTES);
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#626262"/>'
+            .'<text x="32" y="32" dy=".35em" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-size="26" font-weight="600" fill="#fff">'.$initials.'</text></svg>';
+
+        return 'data:image/svg+xml;base64,'.base64_encode($svg);
     }
 
     /** Whether the account signs in with a code from an authenticator app too. */

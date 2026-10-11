@@ -332,7 +332,7 @@ html.dark {
 }
 
 .profile-figures > div {
-    flex: 1 1 9rem;
+    flex: 1 1 6rem;
     padding: 1rem 0 0.85rem;
 }
 
@@ -430,6 +430,10 @@ html.dark {
 }
 
 .profile-tablewrap {
+    /* Positioned, so the table's screen reader text (`sr-only` is absolute)
+       is clipped with the table. Without it the label sits at the table's far
+       right edge and widens the whole page. */
+    position: relative;
     overflow-x: auto;
     border-radius: var(--radius);
     background: var(--p-card);
@@ -621,6 +625,16 @@ html.dark {
 }
 
 @media (max-width: 639.98px) {
+    /* The ticks for each language are on the edit form. Without them the
+       list fits a phone and needs no sideways scroll. */
+    .profile-col-lang {
+        display: none;
+    }
+
+    .profile-table {
+        min-width: 0;
+    }
+
     .profile-row {
         grid-template-columns: minmax(0, 1fr) auto;
     }
@@ -635,5 +649,70 @@ html.dark {
 
     .profile-figures > div + div {
         padding-inline-start: 1rem;
+    }
+}
+
+/* Phones and tablets. A finger needs about 44px, and Filament's top bar
+   button is 32px with 16px of bare bar beside it. The extra hit area is a
+   pseudo-element, so the avatar keeps its size. The menu is teleported to
+   <body>, so its rows are matched by class alone. */
+@media (pointer: coarse) {
+    .fi-user-menu-trigger {
+        position: relative;
+    }
+
+    .fi-user-menu-trigger::after {
+        content: '';
+        position: absolute;
+        inset: -8px;
+    }
+
+    .fi-dropdown-list-item,
+    .fi-theme-switcher-btn {
+        min-height: 2.75rem;
+    }
+}
+
+/* The address under a user's name is for phones. From md up it has its own
+   column (see UsersTable). */
+@media (min-width: 768px) {
+    .users-name .fi-ta-text-item-description {
+        display: none;
+    }
+}
+
+/* The post list's status line under the title, for phones. From md up the
+   status has a badge column. */
+.posts-status {
+    display: block;
+    color: var(--p-faint);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+@media (min-width: 768px) {
+    .posts-status {
+        display: none;
+    }
+}
+
+/* On a phone a row action in the post list shows only its icon, so the
+   title keeps the width. The label stays for screen readers. The action is
+   positioned so the clipped label cannot end up outside the table. */
+@media (max-width: 767.98px) {
+    .posts-act {
+        position: relative;
+        padding: 0.5rem;
+    }
+
+    .posts-act .fi-link-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
     }
 }

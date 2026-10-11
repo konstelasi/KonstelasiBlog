@@ -16,13 +16,15 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\HtmlString;
 
 class PostsTable
 {
     /**
      * The columns that say what a post is and whether it is ready: the
-     * title, the status and a tick for each complete language. The profile
-     * page's list of your own posts shows the same four.
+     * title, the status and a tick for each complete language. On a phone
+     * the status moves under the title and the two ticks drop out, so the
+     * title keeps most of the row. The edit form shows the same facts.
      *
      * @return list<TextColumn|IconColumn>
      */
@@ -31,7 +33,11 @@ class PostsTable
         $title = TextColumn::make('title_en')
             ->label('Title')
             ->placeholder('Untitled')
-            ->description(fn (Post $record): string => $record->slug)
+            // The status line is for phones, where the status has no column of
+            // its own (see `posts-status` in theme.css).
+            ->description(fn (Post $record): HtmlString => new HtmlString(
+                '<span class="posts-status">'.e($record->status->getLabel()).'</span>'.e($record->slug),
+            ))
             ->wrap();
 
         if ($searchable) {
@@ -41,7 +47,8 @@ class PostsTable
         return [
             $title,
             TextColumn::make('status')
-                ->badge(),
+                ->badge()
+                ->visibleFrom('md'),
             // A tick means the title, description and body are all written.
             // Publishing needs both, so a draft with a grey cross is not ready.
             IconColumn::make('has_en')
@@ -49,13 +56,15 @@ class PostsTable
                 ->state(fn (Post $record): bool => $record->hasLanguage('en'))
                 ->boolean()
                 ->falseColor('gray')
-                ->alignCenter(),
+                ->alignCenter()
+                ->visibleFrom('md'),
             IconColumn::make('has_id')
                 ->label('ID')
                 ->state(fn (Post $record): bool => $record->hasLanguage('id'))
                 ->boolean()
                 ->falseColor('gray')
-                ->alignCenter(),
+                ->alignCenter()
+                ->visibleFrom('md'),
         ];
     }
 
@@ -68,7 +77,8 @@ class PostsTable
                     ->label('Published')
                     ->date()
                     ->placeholder('Not yet')
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('md'),
             ])
             // Drafts in progress first, then the newest published post.
             ->defaultSort(fn (Builder $query): Builder => $query
@@ -86,13 +96,18 @@ class PostsTable
                     ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
                     ->url(fn (Post $record): string => $record->publicUrl())
                     ->openUrlInNewTab()
+                    ->extraAttributes(['class' => 'posts-act'])
                     ->visible(fn (Post $record): bool => $record->status === PostStatus::Published),
-                EditAction::make(),
+                // A phone opens the form by tapping the row, so the button
+                // only shows from md up, where there is room for it.
+                EditAction::make()
+                    ->extraAttributes(['class' => 'max-md:hidden']),
                 // Someone who may not edit a post can still read it.
                 Action::make('read')
                     ->label('View')
                     ->icon(Heroicon::OutlinedEye)
                     ->color('gray')
+                    ->extraAttributes(['class' => 'posts-act'])
                     ->url(fn (Post $record): string => PostResource::getUrl('view', ['record' => $record]))
                     ->visible(fn (Post $record): bool => ! PostResource::can('update', $record)),
             ])
