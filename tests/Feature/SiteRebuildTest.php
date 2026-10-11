@@ -150,6 +150,31 @@ class SiteRebuildTest extends TestCase
         $this->assertSame($earlier, RebuildSite::failedAt()->timestamp);
     }
 
+    public function test_a_request_that_goes_through_is_remembered_and_a_failure_keeps_the_earlier_time(): void
+    {
+        config(['services.github.token' => 'test-token']);
+        $this->assertNull(RebuildSite::requestedAt());
+
+        Http::fake(['api.github.com/*' => Http::sequence()->push('', 204)->push('boom', 500)]);
+        (new RebuildSite)->handle();
+        $requested = RebuildSite::requestedAt();
+        $this->assertNotNull($requested);
+
+        $this->travel(1)->hour();
+        (new RebuildSite)->handle();
+
+        $this->assertSame($requested->timestamp, RebuildSite::requestedAt()->timestamp);
+    }
+
+    public function test_without_a_token_no_request_is_remembered(): void
+    {
+        config(['services.github.token' => null]);
+
+        (new RebuildSite)->handle();
+
+        $this->assertNull(RebuildSite::requestedAt());
+    }
+
     public function test_the_admin_warns_while_the_last_rebuild_failed(): void
     {
         $this->actingAs(User::factory()->admin()->create());
