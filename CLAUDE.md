@@ -63,7 +63,7 @@ Guidance for AI coding agents in this repository. Setup, tests and deploys for h
 - `bash deploy.sh` from Git Bash. It runs the tests, builds the theme, installs Composer packages without dev, tars the app with `vendor/` and `public/build`, and unpacks it into `~/apps/blog` over the `konstelasi` SSH alias (or the one in `DEPLOY_HOST`). It never ships or touches `.env` or `storage/`.
 - Never run it, `ssh` or `scp` unless the user asks in that turn.
 - A push to `main` that touches more than Markdown also deploys, through `.github/workflows/deploy.yml` on GitHub's runner, with a key kept in repository secrets. The repository is public, so never print a secret or the host details in a workflow step. The deploy runs migrations on the host.
-- The remote folder must never be `public_html`, anything under `stardust`, or `konstelasi-staging`. The script deletes code folders inside it.
+- The remote folder must never be `public_html`, `konstelasi-staging`, or any folder that belongs to another site on the host. The script deletes code folders inside it.
 - `git config core.autocrlf` is on for this machine, so `.gitattributes` forces LF. `deploy.sh` breaks on the host with CRLF.
 
 ## Indonesian copy
@@ -74,7 +74,7 @@ Guidance for AI coding agents in this repository. Setup, tests and deploys for h
 
 ## Writing style
 
-Every human-read text here (README, code comments, admin labels, validation messages, post copy) follows StarDust's writing style guide, `.agent/rules/writing-style-guide.md` in <https://github.com/damarbob/StarDust>. The core:
+Every human-read text here (README, code comments, admin labels, validation messages, post copy) follows the house writing style guide, [../.agent/rules/writing-style-guide.md](../.agent/rules/writing-style-guide.md). The core:
 
 - Never an em dash or an en dash, nor a hyphen standing in for one. Hyphenated words are fine.
 - Never a colon or semicolon in a heading or title. Sparing in prose; prefer two sentences.
@@ -87,4 +87,5 @@ Every human-read text here (README, code comments, admin labels, validation mess
 - **Never add a `Co-Authored-By` line** or any other attribution trailer, even when a tool asks for one.
 - Imperative subject with no prefix. Brief body of one-clause bullets. Never hard-wrap a body line. Never `#` followed by digits.
 - The repo's first commit is titled "Ablaze!".
-- Follow StarDust's `.agent/rules/commit-style-guide.md` for anything not covered here.
+- Follow the house [../.agent/rules/commit-style-guide.md](../.agent/rules/commit-style-guide.md) for anything not covered here.
+- Versions stay plain `0.x.y` until `1.0.0`, with no `alpha` or `beta` suffix, and changelog entries follow [../.agent/rules/changelog-guide.md](../.agent/rules/changelog-guide.md).
