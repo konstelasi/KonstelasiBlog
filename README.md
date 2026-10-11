@@ -91,7 +91,9 @@ The secrets and recovery codes are encrypted with the app's `APP_KEY`. Do not ch
 
 ## Turning on email
 
-The admin sends mail for one thing, confirming an email change. Without a mailer an address change from the profile page takes effect at once and asks for the current password. With one, the new address is sent a link, the old address is sent a notice that can block the change, and the address changes only when the link is opened.
+The admin sends mail for two things. The first is confirming an email change. Without a mailer an address change from the profile page takes effect at once and asks for the current password. With one, the new address is sent a link, the old address is sent a notice that can block the change, and the address changes only when the link is opened.
+
+The second is a forgotten password. With a mailer, the sign-in page shows a "Forgot password?" link. The person types their email address and is mailed a link that is good for 60 minutes, which opens a page to choose a new password. Only an account with a role is sent one. An address that matches no account is told so on the page, which Filament does by default and which we kept because the staff is a handful of known people. Without a mailer the link and its pages are left out, because the mail would only go to the log. An Admin can still set a new password for anyone on the Users screen. Signing in afterwards still asks for the authenticator code when two-factor is on.
 
 It turns itself on whenever `MAIL_MAILER` is something other than `log` or `array`. We send through the company mailbox, `hello@konstelasi.co.id`, whose outgoing server is `mx3.mailspace.id` on port 465. Port 465 is TLS from the first byte, so the scheme is `smtps`. Only the outgoing settings matter, because the app sends and never reads mail. Put these in the `.env` of the machine, and ask the owner for the password.
 
@@ -109,9 +111,11 @@ QUEUE_CONNECTION=sync
 
 `QUEUE_CONNECTION=sync` matters. These mails are queued, and the host runs no queue worker, so with the default `database` queue they would wait in the `jobs` table forever. With `sync` they are sent while the page saves, which costs a second or two and makes a save fail with an error if the mail server cannot be reached, instead of losing the mail. A failed save leaves the address unchanged. The site rebuild after a post change is not affected.
 
+Reset and email change links are built from the address the request came to, so the app answers only the host in `APP_URL` (`bootstrap/app.php`, `trustHosts`). On the host, `APP_URL` must therefore be `https://blog.konstelasi.co.id`, or every admin request is refused with a 400. A checkout with `APP_ENV=local` is exempt.
+
 On the host, add the same lines to `~/apps/blog/.env` over SSH, because `deploy.sh` never ships `.env`, then run `php artisan config:cache`. The password lives only in `.env` files, which git ignores. Never put it in `.env.example`, this README, a commit or a workflow, because the repository is public.
 
-To check it, change your email address to one you can read. A message should arrive from `hello@konstelasi.co.id`, and the address on your profile changes after you open the link in it. If it lands in spam, check the mailbox's SPF and DKIM records with the mail provider.
+To check it, use "Forgot password?" with your own address, or change your email address to one you can read. A message should arrive from `hello@konstelasi.co.id`, and the link in it either sets the new password or changes the address on your profile. If it lands in spam, check the mailbox's SPF and DKIM records with the mail provider.
 
 ## Importing the old posts
 

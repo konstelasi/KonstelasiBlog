@@ -18,6 +18,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // all carry the header.
         $middleware->append(NoIndex::class);
         $middleware->throttleApi();
+        // Only the host in `APP_URL` is answered (no subdomains). Otherwise a
+        // request with a made-up `Host` header would get a reset link mailed
+        // out that points at that host. It is skipped when `APP_ENV` is `local`.
+        $middleware->trustHosts(
+            at: fn (): array => array_filter([
+                ($host = parse_url((string) config('app.url'), PHP_URL_HOST)) ? '^'.preg_quote($host).'$' : null,
+            ]),
+            subdomains: false,
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

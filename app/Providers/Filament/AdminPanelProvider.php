@@ -6,6 +6,8 @@ use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\Profile;
 use App\Jobs\RebuildSite;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
+use Filament\Auth\Pages\PasswordReset\RequestPasswordReset;
+use Filament\Auth\Pages\PasswordReset\ResetPassword;
 use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -32,6 +34,14 @@ class AdminPanelProvider extends PanelProvider
             // No ->registration(). Accounts are made with
             // `php artisan make:filament-user` and then given a role.
             ->login()
+            // "Forgot password?" mails a reset link, so it exists only when a
+            // real mailer is set. Without one the link would go to the log
+            // while the page claimed it was sent. An Admin can always set a
+            // new password on the Users screen.
+            ->passwordReset(
+                self::mailIsSet() ? RequestPasswordReset::class : null,
+                self::mailIsSet() ? ResetPassword::class : null,
+            )
             // Everyone's own page. Filament draws the profile page without the
             // sidebar and top bar unless it is told it is not simple.
             ->profile(Profile::class, isSimple: false)
@@ -39,7 +49,7 @@ class AdminPanelProvider extends PanelProvider
             // a notice with a block link to the old one. It is on whenever a
             // real mailer is set, so a checkout with `MAIL_MAILER=log` still
             // changes the address at once, with the current password.
-            ->emailChangeVerification(fn (): bool => ! in_array(config('mail.default'), ['log', 'array'], true))
+            ->emailChangeVerification(fn (): bool => self::mailIsSet())
             // Optional for everyone. A person turns it on from their profile,
             // and an Admin can switch it off for a lost phone (the Users edit
             // page, or `php artisan mfa:reset`). Recovery codes are shown once.
@@ -95,6 +105,15 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ]);
+    }
+
+    /**
+     * True when the app sends real mail, which is what the password reset and
+     * the email change check both need.
+     */
+    private static function mailIsSet(): bool
+    {
+        return ! in_array(config('mail.default'), ['log', 'array'], true);
     }
 
     /**
