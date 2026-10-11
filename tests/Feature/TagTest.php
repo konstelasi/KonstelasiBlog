@@ -11,6 +11,7 @@ use App\Jobs\RebuildSite;
 use App\Models\Post;
 use App\Models\Tag;
 use App\Models\User;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Livewire\Livewire;
@@ -104,6 +105,23 @@ class TagTest extends TestCase
 
         $this->assertSame([$tag->id], Post::sole()->tags->modelKeys());
         $this->assertSame(1, Tag::count());
+    }
+
+    /** @return array<string, array{string, bool}> */
+    public static function createOptionByRole(): array
+    {
+        return ['writer' => ['writer', false], 'editor' => ['editor', true], 'admin' => ['admin', true]];
+    }
+
+    #[DataProvider('createOptionByRole')]
+    public function test_only_tag_managers_get_the_create_tag_option_on_a_post(string $role, bool $offered): void
+    {
+        $this->actingAs(User::factory()->{$role}()->create());
+
+        $select = collect(Livewire::test(CreatePost::class)->instance()->getSchema('form')->getFlatComponents())
+            ->first(fn ($component): bool => $component instanceof Select && $component->getName() === 'tags');
+
+        $this->assertSame($offered, $select->hasCreateOptionActionFormSchema());
     }
 
     public function test_an_editor_can_change_the_tags_of_a_live_post_and_the_site_rebuilds(): void
