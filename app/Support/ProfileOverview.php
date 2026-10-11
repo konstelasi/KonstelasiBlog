@@ -100,6 +100,52 @@ class ProfileOverview
             ->all();
     }
 
+    /** The account's most recently edited posts, for the table on the Overview tab. */
+    public function posts(): Collection
+    {
+        return $this->own()->latest('updated_at')->limit(self::LIMIT)->get();
+    }
+
+    /**
+     * Every ability, grouped for the page, with whether this account has it.
+     * The ones it lacks are listed too, so a Writer can see what an Editor adds.
+     *
+     * @return array<string, list<array{sentence: string, allowed: bool}>>
+     */
+    public function abilityGroups(): array
+    {
+        $groups = ['Posts' => [], 'Accounts' => []];
+
+        foreach (Rbac::SENTENCES as $permission => $sentence) {
+            $group = str_starts_with($permission, 'user.') ? 'Accounts' : 'Posts';
+
+            $groups[$group][] = ['sentence' => $sentence, 'allowed' => $this->user->can($permission)];
+        }
+
+        return $groups;
+    }
+
+    /** One line on what the role is for. */
+    public function roleLead(): string
+    {
+        return match ($this->user->roles->first()?->name) {
+            Rbac::WRITER => 'A Writer starts posts and finishes their own drafts. Publishing is for an Editor.',
+            Rbac::EDITOR => 'An Editor edits and publishes any post. Accounts are for an Admin.',
+            Rbac::ADMIN => 'An Admin can do everything an Editor can, and manages accounts too.',
+            default => '',
+        };
+    }
+
+    /**
+     * The action to offer next to a draft that is not ready.
+     *
+     * @param  list<string>  $missing
+     */
+    public static function nextStep(array $missing): string
+    {
+        return count($missing) === 1 ? 'Finish '.$missing[0] : 'Open draft';
+    }
+
     /** @return list<string> the names of the languages the post is not complete in */
     private function missing(Post $post): array
     {

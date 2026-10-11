@@ -2,88 +2,144 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\Posts\PostResource;
-use App\Filament\Resources\Posts\Tables\PostsTable;
 use App\Models\Post;
 use App\Support\BrowserSessions;
 use App\Support\ProfileOverview;
 use Filament\Actions\Action;
+use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Auth\Pages\EditProfile;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Component;
-use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Flex;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Tabs;
-use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\VerticalAlignment;
+use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Url;
 
 /**
  * Everyone's own page. It extends Filament's `EditProfile`, so the rate
- * limit, the current-password check and the password rules are Filament's,
- * and adds what a shared blog needs on top: an overview of the person's own
- * work, the role, and a warning that renaming yourself renames the author on
- * your posts.
+ * limit, the current-password check and the password rules are Filament's.
+ * On top of that it has a header, a list of sections on the left and one
+ * section at a time on the right, each drawn by a small view in
+ * `resources/views/filament/profile/`.
+ *
+ * The section shown is the `section` property, which lives in the URL, so a
+ * reload or a link lands on the same one.
  */
-class Profile extends EditProfile implements HasTable
+class Profile extends EditProfile
 {
-    use InteractsWithTable;
+    /** Section key to label and hint, in the order the list shows them. */
+    private const SECTIONS = [
+        'overview' => ['label' => 'Overview', 'hint' => 'Your work'],
+        'account' => ['label' => 'Account', 'hint' => 'Name, email, password'],
+        'security' => ['label' => 'Security', 'hint' => 'Sign-in and browsers'],
+    ];
+
+    #[Url(as: 'section')]
+    public string $section = 'overview';
+
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
+    }
+
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::SevenExtraLarge;
+    }
+
+    private function currentSection(): string
+    {
+        return array_key_exists($this->section, self::SECTIONS) ? $this->section : 'overview';
+    }
 
     public function content(Schema $schema): Schema
     {
+        $user = $this->getUser();
+        $role = Str::ucfirst((string) $user->roles->first()?->name);
+
         return $schema
             ->components([
-                Tabs::make('Profile')
-                    ->persistTabInQueryString()
-                    ->tabs([
-                        Tab::make('Overview')
-                            ->schema([
-                                View::make('filament.profile.overview')
-                                    ->viewData(fn (): array => ['overview' => new ProfileOverview($this->getUser())]),
-                                EmbeddedTable::make(),
-                            ]),
-                        Tab::make('Account')
-                            ->schema([
-                                $this->getFormContentComponent(),
-                            ]),
-                        Tab::make('Security')
-                            ->schema([
-                                // Filament's own set up, recovery codes and turn
-                                // off actions for the authenticator app.
-                                $this->getMultiFactorAuthenticationContentComponent(),
-                                $this->getBrowserSessionsComponent(),
-                            ]),
-                    ]),
+                View::make('filament.profile.header')
+                    ->viewData(['user' => $user, 'role' => $role]),
+                Flex::make([
+                    View::make('filament.profile.nav')
+                        ->viewData(['items' => self::SECTIONS, 'current' => $this->currentSection()])
+                        ->grow(false),
+                    Group::make($this->sectionComponents()),
+                ])->from('lg'),
             ]);
     }
 
-    /**
-     * Where the account is signed in, and a button to end the others. Left
-     * out unless sessions are kept in the database, because any other driver
-     * would give a list that is wrong.
-     */
-    private function getBrowserSessionsComponent(): Component
+    /** @return array<Component> */
+    private function sectionComponents(): array
     {
-        return Section::make('Where you are signed in')
-            ->description('Each browser that has signed in to your account and has not been idle for too long.')
-            ->compact()
-            ->visible(fn (): bool => BrowserSessions::isAvailable())
-            ->schema([
-                View::make('filament.profile.sessions')
-                    ->viewData(fn (): array => ['sessions' => $this->browserSessions()->all()]),
-                Actions::make([$this->signOutOthersAction()])->key('sessionActions'),
-            ]);
+        return match ($this->currentSection()) {
+            'account' => [$this->getFormContentComponent()],
+            'security' => $this->securityComponents(),
+            default => [
+                View::make('filament.profile.overview')
+                    ->viewData(fn (): array => ['overview' => new ProfileOverview($this->getUser())]),
+            ],
+        };
+    }
+
+    /**
+     * Two-factor sign-in and where the account is signed in. Filament's own
+     * set up, recovery codes and turn off actions are used as they are, only
+     * laid out beside a status line instead of in its stock block.
+     *
+     * @return array<Component>
+     */
+    private function securityComponents(): array
+    {
+        $components = [];
+
+        $provider = Filament::getMultiFactorAuthenticationProviders()['app'] ?? null;
+
+        if ($provider instanceof AppAuthentication) {
+            $components[] = Flex::make([
+                View::make('filament.profile.two-factor')
+                    ->viewData(fn (): array => [
+                        'enabled' => $provider->isEnabled($this->getUser()),
+                        'recoveryCodes' => $provider->isRecoverable() && $provider->isEnabled($this->getUser())
+                            ? count($this->getUser()->getAppAuthenticationRecoveryCodes() ?? [])
+                            : null,
+                    ]),
+                Actions::make($provider->getActions())
+                    ->key('twoFactorActions')
+                    ->grow(false),
+            ])->verticalAlignment(VerticalAlignment::Start)->extraAttributes(['class' => 'profile-state-row']);
+        }
+
+        // Left out unless sessions are kept in the database, because any
+        // other driver would give a list that is wrong.
+        $components[] = Group::make([
+            Flex::make([
+                View::make('filament.profile.sessions-heading'),
+                Actions::make([$this->signOutOthersAction()])
+                    ->key('sessionActions')
+                    ->grow(false),
+            ])->verticalAlignment(VerticalAlignment::End),
+            View::make('filament.profile.sessions')
+                ->viewData(fn (): array => ['sessions' => $this->browserSessions()->all()]),
+        ])->visible(fn (): bool => BrowserSessions::isAvailable())
+            ->extraAttributes(['class' => 'profile-sessions']);
+
+        return $components;
     }
 
     private function signOutOthersAction(): Action
@@ -140,94 +196,86 @@ class Profile extends EditProfile implements HasTable
         return new BrowserSessions($this->getUser(), session()->getId());
     }
 
-    /** The person's own posts, with the same ticks as the Posts list. */
-    public function table(Table $table): Table
+    /** Labels sit above their fields here, not beside them, because the sections already use the left column. */
+    public function defaultForm(Schema $schema): Schema
     {
-        return $table
-            ->query(fn () => Post::query()->where('user_id', $this->getUser()->getKey()))
-            ->heading('Your posts')
-            ->columns(PostsTable::summaryColumns())
-            ->defaultSort('updated_at', 'desc')
-            ->paginated([5, 10, 25])
-            ->defaultPaginationPageOption(5)
-            ->recordUrl(fn (Post $record): string => PostResource::getUrl(
-                PostResource::can('update', $record) ? 'edit' : 'view',
-                ['record' => $record],
-            ))
-            ->recordActions([
-                Action::make('edit')
-                    ->icon(Heroicon::OutlinedPencilSquare)
-                    ->url(fn (Post $record): string => PostResource::getUrl('edit', ['record' => $record]))
-                    ->visible(fn (Post $record): bool => PostResource::can('update', $record)),
-                Action::make('read')
-                    ->label('View')
-                    ->icon(Heroicon::OutlinedEye)
-                    ->color('gray')
-                    ->url(fn (Post $record): string => PostResource::getUrl('view', ['record' => $record]))
-                    ->visible(fn (Post $record): bool => ! PostResource::can('update', $record)),
-            ])
-            ->emptyStateHeading('You have not written a post yet')
-            ->emptyStateDescription('Posts you start show up here.');
+        return parent::defaultForm($schema)->inlineLabel(false);
     }
 
     public function form(Schema $schema): Schema
     {
         return $schema
             ->components([
-                $this->getNameFormComponent(),
-                $this->getEmailFormComponent(),
-                $this->getPasswordFormComponent(),
-                $this->getPasswordConfirmationFormComponent(),
-                $this->getCurrentPasswordFormComponent(),
-                $this->getRoleFormComponent(),
+                $this->aside('Name', 'Printed to readers as the author of your posts.', [
+                    $this->getNameFormComponent(),
+                    Text::make(fn (Get $get): string => (string) $this->nameWarning((string) $get('name')))
+                        ->visible(fn (Get $get): bool => $this->nameWarning((string) $get('name')) !== null)
+                        ->extraAttributes(['class' => 'profile-warn']),
+                ]),
+                $this->aside('Role', 'An Admin changes this on the Users screen.', [
+                    Text::make(fn (): string => Str::ucfirst((string) $this->getUser()->roles->first()?->name))
+                        ->weight('semibold'),
+                ]),
+                $this->aside(
+                    'Email address',
+                    Filament::hasEmailChangeVerification()
+                        ? 'Used to sign in. A link is sent to the new address, and the change happens when you open it.'
+                        : 'Used to sign in.',
+                    [$this->getEmailFormComponent()],
+                ),
+                $this->aside('Password', 'Leave empty to keep the current one. At least 8 characters.', [
+                    $this->getPasswordFormComponent(),
+                    $this->getPasswordConfirmationFormComponent(),
+                ]),
+                $this->aside('Confirm it is you', 'Needed to change the email address or the password.', [
+                    $this->getCurrentPasswordFormComponent(),
+                ])->visible(fn (Get $get): bool => filled($get('password')) || ($get('email') !== $this->getUser()->getAttributeValue('email'))),
             ]);
+    }
+
+    /** One setting: its name and a line about it on the left, the fields on the right. */
+    private function aside(string $heading, string $description, array $schema): Section
+    {
+        return Section::make($heading)
+            ->description($description)
+            ->aside()
+            ->extraAttributes(['class' => 'profile-setting'])
+            ->schema($schema);
     }
 
     protected function getNameFormComponent(): Component
     {
         return parent::getNameFormComponent()
-            ->live(debounce: 500)
-            ->helperText(fn (Get $get): string => $this->nameHelper((string) $get('name')));
-    }
-
-    /** Shown, never saved. An Admin changes roles on the Users screen. */
-    protected function getRoleFormComponent(): Component
-    {
-        return TextInput::make('role')
-            ->disabled()
-            ->dehydrated(false)
-            ->formatStateUsing(fn (): string => Str::ucfirst((string) $this->getUser()->roles->first()?->name))
-            ->helperText('An Admin changes your role.');
+            ->label('Full name')
+            ->live(debounce: 500);
     }
 
     /**
      * The name is printed to readers as the author of the person's posts.
-     * Once it is being changed, say how many posts that touches.
+     * Once it is being changed, say how many posts that touches. Null while
+     * nothing changes or there is nothing to rename.
      */
-    private function nameHelper(string $typed): string
+    private function nameWarning(string $typed): ?string
     {
-        $base = 'Printed to readers as the author of your posts.';
         $user = $this->getUser();
         $typed = trim($typed);
 
         if ($typed === '' || $typed === $user->name) {
-            return $base;
+            return null;
         }
 
         $posts = Post::query()->where('user_id', $user->getKey());
         $total = (clone $posts)->count();
 
         if ($total === 0) {
-            return $base;
+            return null;
         }
 
         $live = (clone $posts)->published()->count();
+        $renames = sprintf('This renames you on %d %s, %d of them live.', $total, $total === 1 ? 'post' : 'posts', $live);
 
-        return sprintf(
-            'This changes the author name on %d %s, %d of them live. The live pages change when the site is rebuilt, which starts when you save.',
-            $total,
-            $total === 1 ? 'post' : 'posts',
-            $live,
-        );
+        return $live === 0
+            ? "{$renames} Nothing on the site changes."
+            : "{$renames} Saving starts a site rebuild, and the live pages show the new name in a few minutes.";
     }
 }

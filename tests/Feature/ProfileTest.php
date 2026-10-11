@@ -18,11 +18,14 @@ class ProfileTest extends TestCase
 
     public function test_the_page_shows_the_role_and_cannot_change_it(): void
     {
-        $this->actingAs(User::factory()->editor()->create());
+        $this->actingAs(User::factory()->editor()->create(['name' => 'Budi Santoso']));
 
         Livewire::test(Profile::class)
-            ->assertFormFieldDisabled('role')
-            ->assertSchemaStateSet(['role' => 'Editor'])
+            ->assertSee('Budi Santoso')
+            ->assertSee('Editor')
+            ->set('section', 'account')
+            ->assertSee('An Admin changes this on the Users screen.')
+            ->assertFormFieldDoesNotExist('role')
             ->fillForm(['role' => 'Admin'])
             ->call('save')
             ->assertHasNoFormErrors();
@@ -39,11 +42,27 @@ class ProfileTest extends TestCase
         $this->actingAs($writer);
 
         Livewire::test(Profile::class)
+            ->set('section', 'account')
             ->assertSee('Printed to readers as the author of your posts.')
+            ->assertDontSee('This renames you')
             ->set('data.name', 'Rani P.')
-            ->assertSee('This changes the author name on 2 posts, 1 of them live.')
+            ->assertSee('This renames you on 2 posts, 1 of them live.')
+            ->assertSee('Saving starts a site rebuild')
             ->set('data.name', 'Rani Putri')
-            ->assertDontSee('This changes the author name');
+            ->assertDontSee('This renames you');
+    }
+
+    public function test_the_warning_says_nothing_changes_on_the_site_when_no_post_is_live(): void
+    {
+        $writer = User::factory()->writer()->create(['name' => 'Rani Putri']);
+        Post::factory()->create(['user_id' => $writer->id]);
+        $this->actingAs($writer);
+
+        Livewire::test(Profile::class)
+            ->set('section', 'account')
+            ->set('data.name', 'Rani P.')
+            ->assertSee('This renames you on 1 post, 0 of them live. Nothing on the site changes.')
+            ->assertDontSee('Saving starts a site rebuild');
     }
 
     public function test_the_warning_is_silent_for_a_writer_with_no_posts(): void
@@ -51,8 +70,9 @@ class ProfileTest extends TestCase
         $this->actingAs(User::factory()->writer()->create(['name' => 'Rani Putri']));
 
         Livewire::test(Profile::class)
+            ->set('section', 'account')
             ->set('data.name', 'Rani P.')
-            ->assertDontSee('This changes the author name');
+            ->assertDontSee('This renames you');
     }
 
     public function test_renaming_a_writer_with_a_live_post_starts_a_rebuild(): void

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Pages\Profile;
 use App\Filament\Resources\Users\Pages\EditUser;
 use App\Models\User;
+use Filament\Actions\Testing\TestAction;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Auth\Pages\Login;
 use Filament\Facades\Filament;
@@ -131,18 +132,34 @@ class TwoFactorTest extends TestCase
         $this->actingAs(User::factory()->writer()->create());
 
         Livewire::test(Profile::class)
-            ->assertSee('Two-factor authentication')
-            ->assertSee('Authenticator app')
-            ->assertSee('Disabled')
+            ->set('section', 'security')
+            ->assertSee('Two-factor sign-in is off')
             ->assertSee('Set up')
-            ->assertDontSee('Turn off');
+            ->assertDontSee('Turn off')
+            ->assertDontSee('recovery codes are left');
 
         [$user] = $this->withTwoFactor('editor');
         $this->actingAs($user);
 
         Livewire::test(Profile::class)
-            ->assertSee('Enabled')
-            ->assertSee('Turn off');
+            ->set('section', 'security')
+            ->assertSee('Two-factor sign-in is on')
+            ->assertSee('2 recovery codes are left')
+            ->assertSee('Turn off')
+            ->assertDontSee('Scan the QR code');
+    }
+
+    public function test_the_set_up_wizard_opens_from_the_security_section(): void
+    {
+        $this->actingAs(User::factory()->writer()->create());
+        $setUp = TestAction::make('setUpAppAuthentication')->schemaComponent('twoFactorActions', schema: 'content');
+
+        Livewire::test(Profile::class)
+            ->set('section', 'security')
+            ->assertActionVisible($setUp)
+            ->mountAction($setUp)
+            ->assertActionMounted($setUp);
+
     }
 
     public function test_an_admin_turns_off_two_factor_for_a_lost_phone(): void

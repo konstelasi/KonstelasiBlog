@@ -83,7 +83,7 @@ class BrowserSessionsTest extends TestCase
         $this->addSession(session()->getId(), $me);
         $this->addSession('mine-phone', $me, self::IPHONE);
 
-        $page = Livewire::test(Profile::class)
+        $page = Livewire::test(Profile::class)->set('section', 'security')
             ->assertSee('Where you are signed in')
             ->assertSee('This browser')
             ->assertSee('Safari on iOS');
@@ -119,7 +119,7 @@ class BrowserSessionsTest extends TestCase
         $this->addSession(session()->getId(), $me);
         $this->addSession('mine-phone', $me, self::IPHONE);
 
-        $page = Livewire::test(Profile::class);
+        $page = Livewire::test(Profile::class)->set('section', 'security');
 
         foreach (range(1, 5) as $try) {
             $page->callAction($this->signOutOthers(), ['password' => "guess-{$try}"])
@@ -140,7 +140,7 @@ class BrowserSessionsTest extends TestCase
         $this->actingAs($me);
         $this->addSession(session()->getId(), $me);
 
-        Livewire::test(Profile::class)
+        Livewire::test(Profile::class)->set('section', 'security')
             ->assertSee('This browser')
             ->assertDontSee('Sign out other browsers');
     }
@@ -150,7 +150,7 @@ class BrowserSessionsTest extends TestCase
         config(['session.driver' => 'file']);
         $this->actingAs(User::factory()->writer()->create());
 
-        Livewire::test(Profile::class)
+        Livewire::test(Profile::class)->set('section', 'security')
             ->assertDontSee('Where you are signed in')
             ->assertDontSee('Sign out other browsers');
     }

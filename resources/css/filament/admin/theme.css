@@ -167,3 +167,473 @@ html.dark {
     font-weight: 600;
     letter-spacing: -0.02em;
 }
+
+/* The profile page (app/Filament/Pages/Profile.php and
+   resources/views/filament/profile/). Quiet and flat like the rest of the
+   admin. Hierarchy comes from type size, weight and 1px rules, and violet
+   marks only the current section and links. The extra tokens below are the
+   profile page's own, in both themes. */
+:root {
+    --p-card: #ffffff;
+    --p-hair: #e4e4e4;
+    --p-dim: #555555;
+    --p-faint: #626262;
+    --p-ok: #1f6b3a;
+    --p-wash: #efecf8;
+    --p-warn-bg: #fbf3df;
+    --p-warn-line: #d9b45a;
+    --p-warn-ink: #5c4300;
+}
+
+html.dark {
+    --p-card: #181818;
+    --p-hair: #242424;
+    --p-dim: #aaaaaa;
+    --p-faint: #8a8a8a;
+    --p-ok: #7fd19b;
+    --p-wash: #221c33;
+    --p-warn-bg: #2a2310;
+    --p-warn-line: #7a6320;
+    --p-warn-ink: #e8d29a;
+}
+
+/* Header, left aligned, not a hero. */
+.profile-who {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    padding-bottom: 1.6rem;
+}
+
+.profile-mono {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 50%;
+    background: var(--brand);
+    color: var(--bg);
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+.profile-who h1 {
+    font-size: 1.65rem;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.profile-who p {
+    margin: 0.1rem 0 0;
+    color: var(--p-dim);
+}
+
+.profile-role {
+    margin-inline-start: 0.5rem;
+    padding: 0.1rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--p-dim);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    vertical-align: 0.2em;
+}
+
+/* The list of sections. A phone gets it as a row across the top. */
+.profile-sub {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 12rem;
+}
+
+.profile-sub button {
+    padding: 0.5rem 0.75rem;
+    border-inline-start: 2px solid transparent;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--p-dim);
+    text-align: start;
+}
+
+.profile-sub button small {
+    display: block;
+    color: var(--p-faint);
+    font-size: 0.75rem;
+}
+
+.profile-sub button[aria-current='page'] {
+    border-inline-start-color: var(--brand);
+    background: var(--p-wash);
+    color: inherit;
+    font-weight: 500;
+}
+
+.profile-sub button:hover:not([aria-current='page']) {
+    color: inherit;
+}
+
+@media (min-width: 1024px) {
+    .profile-sub {
+        position: sticky;
+        top: 6rem;
+    }
+
+    /* The list's wrapper stretches to the section's height, so the list can
+       stay in view with `position: sticky` while the section scrolls. */
+    .fi-sc-flex.fi-from-lg:has(.profile-sub) {
+        align-items: stretch;
+        column-gap: 2.5rem;
+    }
+}
+
+/* A flex item will not shrink below its content by default, so a wide table
+   would push the page sideways instead of scrolling inside its own box. */
+.fi-sc-flex:has(.profile-sub) > .fi-growable {
+    min-width: 0;
+}
+
+@media (max-width: 1023.98px) {
+    .profile-sub {
+        flex-direction: row;
+        width: auto;
+        overflow-x: auto;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .profile-sub button {
+        border-inline-start: 0;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        white-space: nowrap;
+    }
+
+    .profile-sub button small {
+        display: none;
+    }
+
+    .profile-sub button[aria-current='page'] {
+        border-bottom-color: var(--brand);
+        background: none;
+    }
+}
+
+/* Overview. */
+.profile-overview {
+    min-width: 0;
+}
+
+.profile-figures {
+    display: flex;
+    flex-wrap: wrap;
+    border-block: 1px solid var(--border);
+}
+
+.profile-figures > div {
+    flex: 1 1 9rem;
+    padding: 1rem 0 0.85rem;
+}
+
+.profile-figures > div + div {
+    padding-inline-start: 1.5rem;
+    border-inline-start: 1px solid var(--border);
+}
+
+.profile-figures b {
+    display: block;
+    font-size: 2.1rem;
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+}
+
+.profile-figures span {
+    color: var(--p-dim);
+    font-size: 0.8125rem;
+}
+
+.profile-block {
+    margin-top: 2.25rem;
+}
+
+.profile-block > h2,
+.profile-sessions-head h2 {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.profile-lead {
+    margin: 0.2rem 0 0.9rem;
+    max-width: 60ch;
+    color: var(--p-dim);
+}
+
+.profile-todo {
+    border-radius: var(--radius);
+    background: var(--p-card);
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+.profile-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+}
+
+.profile-row + .profile-row {
+    border-top: 1px solid var(--p-hair);
+}
+
+.profile-row-title {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.profile-row-title small {
+    display: block;
+    color: var(--p-dim);
+    font-weight: 400;
+}
+
+.profile-langs {
+    display: flex;
+    gap: 0.375rem;
+}
+
+.profile-lang {
+    padding: 0.05rem 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--p-faint);
+    font-size: 0.6875rem;
+    font-weight: 600;
+}
+
+.profile-lang.is-ok {
+    border-color: currentColor;
+    color: var(--p-ok);
+}
+
+.profile-act {
+    color: var(--brand);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.profile-act:hover {
+    text-decoration: underline;
+}
+
+.profile-tablewrap {
+    overflow-x: auto;
+    border-radius: var(--radius);
+    background: var(--p-card);
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+.profile-table {
+    width: 100%;
+    min-width: 32rem;
+    border-collapse: collapse;
+}
+
+.profile-table th {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--p-faint);
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-align: start;
+}
+
+.profile-table td {
+    padding: 0.7rem 1rem;
+    border-top: 1px solid var(--p-hair);
+    vertical-align: middle;
+}
+
+.profile-table tbody tr:first-child td {
+    border-top: 0;
+}
+
+.profile-status {
+    color: var(--p-faint);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.profile-status.is-live {
+    color: var(--brand);
+}
+
+/* What the role allows. Ruled lines, the ones the role lacks are dimmed. */
+.profile-can {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 0 3rem;
+}
+
+.profile-can h3 {
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--p-faint);
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.profile-can ul {
+    margin: 0 0 1.1rem;
+    padding: 0;
+    list-style: none;
+}
+
+.profile-can li {
+    position: relative;
+    padding: 0.45rem 0 0.45rem 1.65rem;
+    border-bottom: 1px solid var(--p-hair);
+}
+
+.profile-can li::before {
+    content: '';
+    position: absolute;
+    top: 0.75rem;
+    left: 0.25rem;
+    width: 0.6rem;
+    height: 0.35rem;
+    border-bottom: 2px solid var(--p-ok);
+    border-left: 2px solid var(--p-ok);
+    transform: rotate(-45deg);
+}
+
+.profile-can li.is-no {
+    color: var(--p-faint);
+}
+
+.profile-can li.is-no::before {
+    top: 1.05rem;
+    height: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-top: 2px solid var(--border);
+    transform: none;
+}
+
+/* Account. Aside sections become ruled rows, with no card round the fields. */
+.profile-setting {
+    padding-block: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.profile-setting:first-child {
+    border-top: 0;
+    padding-top: 0.25rem;
+}
+
+.profile-setting .fi-section.fi-aside > .fi-section-content-ctn {
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+}
+
+.profile-setting .fi-section-header-heading {
+    font-size: 0.9375rem;
+}
+
+.profile-setting .fi-input-wrp {
+    max-width: 26rem;
+}
+
+.profile-warn {
+    max-width: 34rem;
+    padding: 0.75rem 0.9rem;
+    border-inline-start: 3px solid var(--p-warn-line);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: var(--p-warn-bg);
+    color: var(--p-warn-ink);
+    font-size: 0.8125rem;
+}
+
+/* Security. */
+.profile-state-row {
+    padding-block: 1rem;
+    border-block: 1px solid var(--border);
+}
+
+.profile-state {
+    min-width: 0;
+}
+
+.profile-state strong {
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.profile-state p {
+    margin: 0.2rem 0 0;
+    max-width: 56ch;
+    color: var(--p-dim);
+    font-size: 0.8125rem;
+}
+
+.profile-state ol {
+    margin: 0.7rem 0 0;
+    padding-inline-start: 1.25rem;
+    max-width: 56ch;
+    color: var(--p-dim);
+    font-size: 0.8125rem;
+    list-style: decimal;
+}
+
+.profile-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-inline-end: 0.5rem;
+    border-radius: 50%;
+    background: var(--p-faint);
+}
+
+.profile-dot.is-on {
+    background: var(--p-ok);
+}
+
+.profile-sessions {
+    margin-top: 1rem;
+}
+
+.profile-sessions-head .profile-lead {
+    margin-bottom: 0;
+}
+
+.profile-here {
+    margin-inline-start: 0.5rem;
+    padding: 0.05rem 0.55rem;
+    border-radius: 999px;
+    background: var(--p-wash);
+    color: var(--brand);
+    font-size: 0.6875rem;
+    font-weight: 600;
+}
+
+@media (max-width: 639.98px) {
+    .profile-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .profile-row .profile-langs {
+        display: none;
+    }
+
+    .profile-figures b {
+        font-size: 1.75rem;
+    }
+
+    .profile-figures > div + div {
+        padding-inline-start: 1rem;
+    }
+}
