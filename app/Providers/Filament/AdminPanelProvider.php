@@ -33,9 +33,9 @@ class AdminPanelProvider extends PanelProvider
             // No ->registration(). Accounts are made with
             // `php artisan make:filament-user` and then given a role.
             ->login()
-            // Everyone's own page, with the role and a warning that a new
-            // name renames the author on their posts.
-            ->profile(Profile::class)
+            // Everyone's own page. Filament draws the profile page without the
+            // sidebar and top bar unless it is told it is not simple.
+            ->profile(Profile::class, isSimple: false)
             // Changing an email address mails a link to the new address, and
             // a notice with a block link to the old one. It is on whenever a
             // real mailer is set, so a checkout with `MAIL_MAILER=log` still

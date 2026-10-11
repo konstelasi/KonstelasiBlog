@@ -16,6 +16,17 @@ class ProfileTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_the_page_keeps_the_sidebar_and_the_top_bar(): void
+    {
+        $this->actingAs(User::factory()->writer()->create());
+
+        $this->get('/admin/profile')
+            ->assertOk()
+            ->assertSee('fi-sidebar', false)
+            ->assertSee('fi-topbar', false)
+            ->assertSee('Posts');
+    }
+
     public function test_the_page_shows_the_role_and_cannot_change_it(): void
     {
         $this->actingAs(User::factory()->editor()->create(['name' => 'Budi Santoso']));
