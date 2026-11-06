@@ -91,6 +91,19 @@ class ImportPostsTest extends TestCase
         $this->assertSame('Hello', $post->title_en);
     }
 
+    public function test_it_refuses_a_file_without_a_title(): void
+    {
+        $post = $this->pair('Hello');
+        unset($post['id']['title']);
+        $dir = $this->stage(['hello' => $post]);
+
+        $this->artisan('posts:import', ['path' => $dir])
+            ->expectsOutputToContain('id/hello.md has no title.')
+            ->assertFailed();
+
+        $this->assertSame(0, Post::count());
+    }
+
     public function test_it_imports_the_site_posts_as_published(): void
     {
         // The site keeps its Markdown posts only until it reads them from

@@ -10,6 +10,7 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 use Spatie\YamlFrontMatter\YamlFrontMatter;
 
 /**
@@ -56,30 +57,21 @@ class ImportPosts extends Command
 
         foreach ($files['en'] as $file) {
             $slug = basename($file, '.md');
-            $fields = ['status' => PostStatus::Published];
 
-            foreach (Post::LANGUAGES as $lang) {
-                $doc = YamlFrontMatter::parseFile("{$root}/{$lang}/{$file}");
+            try {
+                $pair = $this->readPair($root, $file);
+            } catch (InvalidArgumentException $e) {
+                $this->error($e->getMessage());
 
-                foreach (['title', 'description'] as $key) {
-                    if (blank($doc->matter($key))) {
-                        $this->error("{$lang}/{$file} has no {$key}.");
-
-                        return self::FAILURE;
-                    }
-                }
-
-                $fields["title_{$lang}"] = trim($doc->matter('title'));
-                $fields["description_{$lang}"] = trim($doc->matter('description'));
-                $fields["body_{$lang}"] = trim(str_replace("\r\n", "\n", $doc->body()), "\n")."\n";
-
-                // English carries the date and the author. Indonesian only
-                // fills them in when English leaves them out.
-                $fields['published_at'] ??= $this->date($doc->matter('published'));
-                $fields['author'] ??= $doc->matter('author');
+                return self::FAILURE;
             }
 
-            $fields['author'] = filled($fields['author']) ? $fields['author'] : Post::DEFAULT_AUTHOR;
+            $fields = [
+                'status' => PostStatus::Published,
+                ...$pair['text'],
+                'published_at' => $pair['published_at'],
+                'author' => filled($pair['author']) ? $pair['author'] : Post::DEFAULT_AUTHOR,
+            ];
 
             $this->warnAboutStyle($slug, $fields);
 
@@ -88,6 +80,40 @@ class ImportPosts extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Reads one post's two files. English carries the date and the author,
+     * and Indonesian only fills them in when English leaves them out.
+     *
+     * @return array{text: array<string, string>, published_at: ?Carbon, author: mixed}
+     *
+     * @throws InvalidArgumentException When a file has no title or no description.
+     */
+    private function readPair(string $root, string $file): array
+    {
+        $text = [];
+        $publishedAt = null;
+        $author = null;
+
+        foreach (Post::LANGUAGES as $lang) {
+            $doc = YamlFrontMatter::parseFile("{$root}/{$lang}/{$file}");
+
+            foreach (['title', 'description'] as $key) {
+                if (blank($doc->matter($key))) {
+                    throw new InvalidArgumentException("{$lang}/{$file} has no {$key}.");
+                }
+            }
+
+            $text["title_{$lang}"] = trim($doc->matter('title'));
+            $text["description_{$lang}"] = trim($doc->matter('description'));
+            $text["body_{$lang}"] = trim(str_replace("\r\n", "\n", $doc->body()), "\n")."\n";
+
+            $publishedAt ??= $this->date($doc->matter('published'));
+            $author ??= $doc->matter('author');
+        }
+
+        return ['text' => $text, 'published_at' => $publishedAt, 'author' => $author];
     }
 
     private function resolve(string $path): ?string
