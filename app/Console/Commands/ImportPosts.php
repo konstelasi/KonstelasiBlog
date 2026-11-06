@@ -17,10 +17,13 @@ use Spatie\YamlFrontMatter\YamlFrontMatter;
  * Reads the posts that the Astro site kept as Markdown, one file per
  * language with the same name in `en/` and `id/`, and stores each pair as
  * one published post. Running it again updates the same rows, matched by
- * slug, so it is safe to repeat.
+ * slug, so it is safe to repeat. With `--draft` it never publishes, see
+ * `importDrafts()`.
  */
-#[Signature('posts:import {path=../src/content/blog : Folder that holds the en/ and id/ folders, relative to this app}')]
-#[Description('Import paired English and Indonesian Markdown posts as published posts')]
+#[Signature('posts:import
+    {path=../src/content/blog : Folder that holds the en/ and id/ folders, relative to this app}
+    {--draft : Save new posts as drafts and refresh the text of existing drafts, never publishing}')]
+#[Description('Import paired English and Indonesian Markdown posts as published posts, or as drafts with --draft')]
 class ImportPosts extends Command
 {
     public function handle(): int
@@ -55,6 +58,10 @@ class ImportPosts extends Command
             return self::SUCCESS;
         }
 
+        if ($this->option('draft')) {
+            return $this->importDrafts($root, $files['en']);
+        }
+
         foreach ($files['en'] as $file) {
             $slug = basename($file, '.md');
 
@@ -77,6 +84,73 @@ class ImportPosts extends Command
 
             $post = Post::updateOrCreate(['slug' => $slug], $fields);
             $this->info(($post->wasRecentlyCreated ? 'Created ' : 'Updated ').$slug);
+        }
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * The `--draft` run. A pair with no post yet becomes a draft, seeded with
+     * the date and author in its files. A pair whose slug is a draft has its
+     * six text fields refreshed and nothing else, so the date, author, tags
+     * and writer set in the admin stay. A slug that is published stops the
+     * whole run before anything is written, so no draft run changes a live page.
+     *
+     * @param  list<string>  $files  The file names in `en/`, each `<slug>.md`.
+     */
+    private function importDrafts(string $root, array $files): int
+    {
+        $pairs = [];
+        $existing = [];
+
+        try {
+            foreach ($files as $file) {
+                $slug = basename($file, '.md');
+                $pairs[$slug] = $this->readPair($root, $file);
+                $existing[$slug] = Post::where('slug', $slug)->first();
+            }
+        } catch (InvalidArgumentException $e) {
+            $this->error($e->getMessage());
+
+            return self::FAILURE;
+        }
+
+        $live = array_keys(array_filter($existing, fn (?Post $post) => $post?->status === PostStatus::Published));
+        if ($live) {
+            foreach ($live as $slug) {
+                $this->error("Refused {$slug}: it is published, so a draft import leaves it alone. Nothing was imported.");
+            }
+
+            return self::FAILURE;
+        }
+
+        foreach ($pairs as $slug => $pair) {
+            $this->warnAboutStyle($slug, $pair['text']);
+
+            $post = $existing[$slug];
+            if ($post === null) {
+                Post::create([
+                    'slug' => $slug,
+                    'status' => PostStatus::Draft,
+                    ...$pair['text'],
+                    'published_at' => $pair['published_at'],
+                    'author' => filled($pair['author']) ? $pair['author'] : Post::DEFAULT_AUTHOR,
+                ]);
+                $this->info("Created {$slug} (draft)");
+
+                continue;
+            }
+
+            $post->fill($pair['text']);
+            $changed = array_keys($post->getDirty());
+            if ($changed === []) {
+                $this->info("Unchanged {$slug}");
+
+                continue;
+            }
+
+            $post->save();
+            $this->info("Refreshed {$slug} (".implode(', ', $changed).')');
         }
 
         return self::SUCCESS;
