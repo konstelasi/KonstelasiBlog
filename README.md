@@ -143,6 +143,14 @@ php artisan posts:import some/path --draft --include-live
 
 A published post keeps its status and date and takes the new title, description and body in both languages. The site rebuilds as it does when someone edits a live post in the admin, and only for a post whose text really changed. The flag needs `--draft`, and the command refuses to run with it alone.
 
+Before a real run, add `--dry-run` to see what each slug would do.
+
+```bash
+php artisan posts:import some/path --draft --dry-run
+```
+
+It reads the same files, decides the same way and refuses for the same reasons, and it writes nothing and starts no rebuild. Its lines read `Would create` and `Would refresh`, the second with the fields that would change. It needs `--draft` too.
+
 Each slug gets one line of output, `Created` for a new draft, `Refreshed` with the fields that changed, or `Unchanged`. The text is kept as written, and a line that breaks the house writing style is reported as a warning, because the admin asks for it to be fixed when someone saves the post.
 
 ## Writing a post

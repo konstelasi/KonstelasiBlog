@@ -23,16 +23,19 @@ use Spatie\YamlFrontMatter\YamlFrontMatter;
 #[Signature('posts:import
     {path=../src/content/blog : Folder that holds the en/ and id/ folders, relative to this app}
     {--draft : Save new posts as drafts and refresh the text of existing drafts, never publishing}
-    {--include-live : With --draft, also refresh the text of posts that are already published}')]
+    {--include-live : With --draft, also refresh the text of posts that are already published}
+    {--dry-run : With --draft, print what each post would do and write nothing}')]
 #[Description('Import paired English and Indonesian Markdown posts as published posts, or as drafts with --draft')]
 class ImportPosts extends Command
 {
     public function handle(): int
     {
-        if ($this->option('include-live') && ! $this->option('draft')) {
-            $this->error('--include-live only works together with --draft.');
+        foreach (['include-live', 'dry-run'] as $flag) {
+            if ($this->option($flag) && ! $this->option('draft')) {
+                $this->error("--{$flag} only works together with --draft.");
 
-            return self::FAILURE;
+                return self::FAILURE;
+            }
         }
 
         $root = $this->resolve($this->argument('path'));
@@ -104,12 +107,14 @@ class ImportPosts extends Command
      * whole run before anything is written, so no draft run changes a live
      * page by accident. With `--include-live` a published post is refreshed
      * the same way, keeps its status and date, and the observer starts the
-     * site rebuild when its text really changed.
+     * site rebuild when its text really changed. With `--dry-run` the run
+     * decides everything the same way, refusals included, and writes nothing.
      *
      * @param  list<string>  $files  The file names in `en/`, each `<slug>.md`.
      */
     private function importDrafts(string $root, array $files): int
     {
+        $dryRun = (bool) $this->option('dry-run');
         $pairs = [];
         $existing = [];
 
@@ -139,14 +144,16 @@ class ImportPosts extends Command
 
             $post = $existing[$slug];
             if ($post === null) {
-                Post::create([
-                    'slug' => $slug,
-                    'status' => PostStatus::Draft,
-                    ...$pair['text'],
-                    'published_at' => $pair['published_at'],
-                    'author' => filled($pair['author']) ? $pair['author'] : Post::DEFAULT_AUTHOR,
-                ]);
-                $this->info("Created {$slug} (draft)");
+                if (! $dryRun) {
+                    Post::create([
+                        'slug' => $slug,
+                        'status' => PostStatus::Draft,
+                        ...$pair['text'],
+                        'published_at' => $pair['published_at'],
+                        'author' => filled($pair['author']) ? $pair['author'] : Post::DEFAULT_AUTHOR,
+                    ]);
+                }
+                $this->info(($dryRun ? 'Would create ' : 'Created ')."{$slug} (draft)");
 
                 continue;
             }
@@ -159,8 +166,14 @@ class ImportPosts extends Command
                 continue;
             }
 
-            $post->save();
-            $this->info('Refreshed '.($post->status === PostStatus::Published ? 'live post ' : '')."{$slug} (".implode(', ', $changed).')');
+            if (! $dryRun) {
+                $post->save();
+            }
+            $this->info(($dryRun ? 'Would refresh ' : 'Refreshed ').($post->status === PostStatus::Published ? 'live post ' : '')."{$slug} (".implode(', ', $changed).')');
+        }
+
+        if ($dryRun) {
+            $this->info('Dry run, nothing was written.');
         }
 
         return self::SUCCESS;

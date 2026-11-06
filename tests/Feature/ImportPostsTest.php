@@ -239,6 +239,54 @@ class ImportPostsTest extends TestCase
         $this->assertSame(0, Post::count());
     }
 
+    public function test_dry_run_writes_nothing_and_says_what_would_happen(): void
+    {
+        Post::factory()->create(['slug' => 'draft-one', 'title_en' => 'Old draft']);
+        $live = Post::factory()->published()->create(['slug' => 'live-one', 'title_en' => 'Old live']);
+        $dir = $this->stage([
+            'new-one' => $this->pair('New'),
+            'draft-one' => $this->pair('Draft'),
+            'live-one' => $this->pair('Live'),
+        ]);
+        Bus::fake();
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true, '--include-live' => true, '--dry-run' => true]);
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('Would create new-one (draft)', $output);
+        $this->assertStringContainsString('Would refresh draft-one (', $output);
+        $this->assertStringContainsString('Would refresh live post live-one (', $output);
+        $this->assertStringContainsString('Dry run, nothing was written.', $output);
+
+        $this->assertFalse(Post::where('slug', 'new-one')->exists());
+        $this->assertSame('Old draft', Post::where('slug', 'draft-one')->sole()->title_en);
+        $this->assertSame('Old live', $live->fresh()->title_en);
+        Bus::assertNotDispatchedAfterResponse(RebuildSite::class);
+    }
+
+    public function test_dry_run_fails_on_the_same_refusal_as_a_real_run(): void
+    {
+        Post::factory()->published()->create(['slug' => 'live-one']);
+        $dir = $this->stage(['live-one' => $this->pair('Live'), 'new-one' => $this->pair('New')]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true, '--dry-run' => true]);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('Refused live-one', $output);
+        $this->assertFalse(Post::where('slug', 'new-one')->exists());
+    }
+
+    public function test_dry_run_needs_draft(): void
+    {
+        $dir = $this->stage(['hello' => $this->pair('Hello')]);
+
+        [$code, $output] = $this->importFrom($dir, ['--dry-run' => true]);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('--dry-run only works together with --draft.', $output);
+        $this->assertSame(0, Post::count());
+    }
+
     public function test_draft_reads_every_file_before_writing_any(): void
     {
         $broken = $this->pair('Broken');
