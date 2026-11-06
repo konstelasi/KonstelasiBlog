@@ -184,6 +184,61 @@ class ImportPostsTest extends TestCase
         $this->assertFalse(Post::where('slug', 'new-one')->exists());
     }
 
+    public function test_include_live_refreshes_a_published_post_and_starts_one_rebuild(): void
+    {
+        $live = Post::factory()->published('2026-01-02 08:00:00')->create(['slug' => 'live-one']);
+        $dir = $this->stage(['live-one' => $this->pair('Fixed')]);
+        Bus::fake();
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true, '--include-live' => true]);
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('Refreshed live post live-one (', $output);
+
+        $live->refresh();
+        $this->assertSame('Fixed', $live->title_en);
+        $this->assertSame(PostStatus::Published, $live->status);
+        $this->assertSame('2026-01-02 08:00:00', $live->published_at->toDateTimeString());
+        Bus::assertDispatchedAfterResponse(RebuildSite::class, 1);
+
+        Bus::fake();
+
+        [, $again] = $this->importFrom($dir, ['--draft' => true, '--include-live' => true]);
+
+        $this->assertStringContainsString('Unchanged live-one', $again);
+        Bus::assertNotDispatchedAfterResponse(RebuildSite::class);
+    }
+
+    public function test_include_live_still_saves_new_posts_and_existing_drafts_as_drafts(): void
+    {
+        Post::factory()->published()->create(['slug' => 'live-one']);
+        Post::factory()->create(['slug' => 'draft-one']);
+        $dir = $this->stage([
+            'live-one' => $this->pair('Live'),
+            'draft-one' => $this->pair('Draft'),
+            'new-one' => $this->pair('New'),
+        ]);
+        Bus::fake();
+
+        $this->importFrom($dir, ['--draft' => true, '--include-live' => true]);
+
+        $this->assertSame(PostStatus::Published, Post::where('slug', 'live-one')->sole()->status);
+        $this->assertSame(PostStatus::Draft, Post::where('slug', 'draft-one')->sole()->status);
+        $this->assertSame(PostStatus::Draft, Post::where('slug', 'new-one')->sole()->status);
+        Bus::assertDispatchedAfterResponse(RebuildSite::class, 1);
+    }
+
+    public function test_include_live_needs_draft(): void
+    {
+        $dir = $this->stage(['hello' => $this->pair('Hello')]);
+
+        [$code, $output] = $this->importFrom($dir, ['--include-live' => true]);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('--include-live only works together with --draft.', $output);
+        $this->assertSame(0, Post::count());
+    }
+
     public function test_draft_reads_every_file_before_writing_any(): void
     {
         $broken = $this->pair('Broken');

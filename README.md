@@ -133,7 +133,15 @@ To load posts without publishing them, add `--draft`.
 php artisan posts:import some/path --draft
 ```
 
-A pair with no post yet is saved as a draft. Its date and author come from the `published` and `author` lines at the top of the English file, and stay empty or default when those lines are missing. A pair whose slug already belongs to a draft refreshes that draft's titles, descriptions and bodies in both languages and nothing else, so the date, author and tags set in the admin stay as they are. Whatever was edited in those six fields in the admin is replaced by the file. A slug that belongs to a published post stops the whole run before anything is written, so a draft import never changes a live page.
+A pair with no post yet is saved as a draft. Its date and author come from the `published` and `author` lines at the top of the English file, and stay empty or default when those lines are missing. A pair whose slug already belongs to a draft refreshes that draft's titles, descriptions and bodies in both languages and nothing else, so the date, author and tags set in the admin stay as they are. Whatever was edited in those six fields in the admin is replaced by the file. A slug that belongs to a published post stops the whole run before anything is written, so `--draft` alone never changes a live page.
+
+To refresh the text of a live post too, add `--include-live` next to `--draft`.
+
+```bash
+php artisan posts:import some/path --draft --include-live
+```
+
+A published post keeps its status and date and takes the new title, description and body in both languages. The site rebuilds as it does when someone edits a live post in the admin, and only for a post whose text really changed. The flag needs `--draft`, and the command refuses to run with it alone.
 
 Each slug gets one line of output, `Created` for a new draft, `Refreshed` with the fields that changed, or `Unchanged`. The text is kept as written, and a line that breaks the house writing style is reported as a warning, because the admin asks for it to be fixed when someone saves the post.
 

@@ -22,12 +22,19 @@ use Spatie\YamlFrontMatter\YamlFrontMatter;
  */
 #[Signature('posts:import
     {path=../src/content/blog : Folder that holds the en/ and id/ folders, relative to this app}
-    {--draft : Save new posts as drafts and refresh the text of existing drafts, never publishing}')]
+    {--draft : Save new posts as drafts and refresh the text of existing drafts, never publishing}
+    {--include-live : With --draft, also refresh the text of posts that are already published}')]
 #[Description('Import paired English and Indonesian Markdown posts as published posts, or as drafts with --draft')]
 class ImportPosts extends Command
 {
     public function handle(): int
     {
+        if ($this->option('include-live') && ! $this->option('draft')) {
+            $this->error('--include-live only works together with --draft.');
+
+            return self::FAILURE;
+        }
+
         $root = $this->resolve($this->argument('path'));
         if ($root === null) {
             $this->error("No en/ and id/ folders found under {$this->argument('path')}.");
@@ -94,7 +101,10 @@ class ImportPosts extends Command
      * the date and author in its files. A pair whose slug is a draft has its
      * six text fields refreshed and nothing else, so the date, author, tags
      * and writer set in the admin stay. A slug that is published stops the
-     * whole run before anything is written, so no draft run changes a live page.
+     * whole run before anything is written, so no draft run changes a live
+     * page by accident. With `--include-live` a published post is refreshed
+     * the same way, keeps its status and date, and the observer starts the
+     * site rebuild when its text really changed.
      *
      * @param  list<string>  $files  The file names in `en/`, each `<slug>.md`.
      */
@@ -116,9 +126,9 @@ class ImportPosts extends Command
         }
 
         $live = array_keys(array_filter($existing, fn (?Post $post) => $post?->status === PostStatus::Published));
-        if ($live) {
+        if ($live && ! $this->option('include-live')) {
             foreach ($live as $slug) {
-                $this->error("Refused {$slug}: it is published, so a draft import leaves it alone. Nothing was imported.");
+                $this->error("Refused {$slug}: it is published. Add --include-live to refresh a live post. Nothing was imported.");
             }
 
             return self::FAILURE;
@@ -150,7 +160,7 @@ class ImportPosts extends Command
             }
 
             $post->save();
-            $this->info("Refreshed {$slug} (".implode(', ', $changed).')');
+            $this->info('Refreshed '.($post->status === PostStatus::Published ? 'live post ' : '')."{$slug} (".implode(', ', $changed).')');
         }
 
         return self::SUCCESS;
