@@ -127,6 +127,32 @@ php artisan posts:import some/path  # any folder with en/ and id/ inside
 
 It matches posts by slug, so running it twice updates the same posts instead of adding copies.
 
+To load posts without publishing them, add `--draft`.
+
+```bash
+php artisan posts:import some/path --draft
+```
+
+A pair with no post yet is saved as a draft. Its date and author come from the `published` and `author` lines at the top of the English file, and stay empty or default when those lines are missing. A pair whose slug already belongs to a draft refreshes that draft's titles, descriptions and bodies in both languages and nothing else, so the date, author and tags set in the admin stay as they are. Whatever was edited in those six fields in the admin is replaced by the file. A slug that belongs to a published post stops the whole run before anything is written, so `--draft` alone never changes a live page.
+
+To refresh the text of a live post too, add `--include-live` next to `--draft`.
+
+```bash
+php artisan posts:import some/path --draft --include-live
+```
+
+A published post keeps its status and date and takes the new title, description and body in both languages. The site rebuilds as it does when someone edits a live post in the admin, and only for a post whose text really changed. The flag needs `--draft`, and the command refuses to run with it alone.
+
+Before a real run, add `--dry-run` to see what each slug would do.
+
+```bash
+php artisan posts:import some/path --draft --dry-run
+```
+
+It reads the same files, decides the same way and refuses for the same reasons, and it writes nothing and starts no rebuild. Its lines read `Would create` and `Would refresh`, the second with the fields that would change. It needs `--draft` too.
+
+Each slug gets one line of output, `Created` for a new draft, `Refreshed` with the fields that changed, or `Unchanged`. The text is kept as written, and a line that breaks the house writing style is reported as a warning, because the admin asks for it to be fixed when someone saves the post.
+
 ## Writing a post
 
 Sign in at `/admin` and open Posts. A post has a Publishing section (status, date, slug and the writer, which is filled in and can't be edited) and one tab per language with a title, a short description and a Markdown body. Images dropped into a body are stored on the server and linked from the Markdown. In the list, the EN and ID columns show a tick when that language has a title, a description and a body, so a draft that isn't ready to publish is easy to spot.

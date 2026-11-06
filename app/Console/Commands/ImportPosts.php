@@ -10,20 +10,34 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 use Spatie\YamlFrontMatter\YamlFrontMatter;
 
 /**
  * Reads the posts that the Astro site kept as Markdown, one file per
  * language with the same name in `en/` and `id/`, and stores each pair as
  * one published post. Running it again updates the same rows, matched by
- * slug, so it is safe to repeat.
+ * slug, so it is safe to repeat. With `--draft` it never publishes, see
+ * `importDrafts()`.
  */
-#[Signature('posts:import {path=../src/content/blog : Folder that holds the en/ and id/ folders, relative to this app}')]
-#[Description('Import paired English and Indonesian Markdown posts as published posts')]
+#[Signature('posts:import
+    {path=../src/content/blog : Folder that holds the en/ and id/ folders, relative to this app}
+    {--draft : Save new posts as drafts and refresh the text of existing drafts, never publishing}
+    {--include-live : With --draft, also refresh the text of posts that are already published}
+    {--dry-run : With --draft, print what each post would do and write nothing}')]
+#[Description('Import paired English and Indonesian Markdown posts as published posts, or as drafts with --draft')]
 class ImportPosts extends Command
 {
     public function handle(): int
     {
+        foreach (['include-live', 'dry-run'] as $flag) {
+            if ($this->option($flag) && ! $this->option('draft')) {
+                $this->error("--{$flag} only works together with --draft.");
+
+                return self::FAILURE;
+            }
+        }
+
         $root = $this->resolve($this->argument('path'));
         if ($root === null) {
             $this->error("No en/ and id/ folders found under {$this->argument('path')}.");
@@ -54,32 +68,27 @@ class ImportPosts extends Command
             return self::SUCCESS;
         }
 
+        if ($this->option('draft')) {
+            return $this->importDrafts($root, $files['en']);
+        }
+
         foreach ($files['en'] as $file) {
             $slug = basename($file, '.md');
-            $fields = ['status' => PostStatus::Published];
 
-            foreach (Post::LANGUAGES as $lang) {
-                $doc = YamlFrontMatter::parseFile("{$root}/{$lang}/{$file}");
+            try {
+                $pair = $this->readPair($root, $file);
+            } catch (InvalidArgumentException $e) {
+                $this->error($e->getMessage());
 
-                foreach (['title', 'description'] as $key) {
-                    if (blank($doc->matter($key))) {
-                        $this->error("{$lang}/{$file} has no {$key}.");
-
-                        return self::FAILURE;
-                    }
-                }
-
-                $fields["title_{$lang}"] = trim($doc->matter('title'));
-                $fields["description_{$lang}"] = trim($doc->matter('description'));
-                $fields["body_{$lang}"] = trim(str_replace("\r\n", "\n", $doc->body()), "\n")."\n";
-
-                // English carries the date and the author. Indonesian only
-                // fills them in when English leaves them out.
-                $fields['published_at'] ??= $this->date($doc->matter('published'));
-                $fields['author'] ??= $doc->matter('author');
+                return self::FAILURE;
             }
 
-            $fields['author'] = filled($fields['author']) ? $fields['author'] : Post::DEFAULT_AUTHOR;
+            $fields = [
+                'status' => PostStatus::Published,
+                ...$pair['text'],
+                'published_at' => $pair['published_at'],
+                'author' => filled($pair['author']) ? $pair['author'] : Post::DEFAULT_AUTHOR,
+            ];
 
             $this->warnAboutStyle($slug, $fields);
 
@@ -88,6 +97,120 @@ class ImportPosts extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * The `--draft` run. A pair with no post yet becomes a draft, seeded with
+     * the date and author in its files. A pair whose slug is a draft has its
+     * six text fields refreshed and nothing else, so the date, author, tags
+     * and writer set in the admin stay. A slug that is published stops the
+     * whole run before anything is written, so no draft run changes a live
+     * page by accident. With `--include-live` a published post is refreshed
+     * the same way, keeps its status and date, and the observer starts the
+     * site rebuild when its text really changed. With `--dry-run` the run
+     * decides everything the same way, refusals included, and writes nothing.
+     *
+     * @param  list<string>  $files  The file names in `en/`, each `<slug>.md`.
+     */
+    private function importDrafts(string $root, array $files): int
+    {
+        $dryRun = (bool) $this->option('dry-run');
+        $pairs = [];
+        $existing = [];
+
+        try {
+            foreach ($files as $file) {
+                $slug = basename($file, '.md');
+                $pairs[$slug] = $this->readPair($root, $file);
+                $existing[$slug] = Post::where('slug', $slug)->first();
+            }
+        } catch (InvalidArgumentException $e) {
+            $this->error($e->getMessage());
+
+            return self::FAILURE;
+        }
+
+        $live = array_keys(array_filter($existing, fn (?Post $post) => $post?->status === PostStatus::Published));
+        if ($live && ! $this->option('include-live')) {
+            foreach ($live as $slug) {
+                $this->error("Refused {$slug}: it is published. Add --include-live to refresh a live post. Nothing was imported.");
+            }
+
+            return self::FAILURE;
+        }
+
+        foreach ($pairs as $slug => $pair) {
+            $this->warnAboutStyle($slug, $pair['text']);
+
+            $post = $existing[$slug];
+            if ($post === null) {
+                if (! $dryRun) {
+                    Post::create([
+                        'slug' => $slug,
+                        'status' => PostStatus::Draft,
+                        ...$pair['text'],
+                        'published_at' => $pair['published_at'],
+                        'author' => filled($pair['author']) ? $pair['author'] : Post::DEFAULT_AUTHOR,
+                    ]);
+                }
+                $this->info(($dryRun ? 'Would create ' : 'Created ')."{$slug} (draft)");
+
+                continue;
+            }
+
+            $post->fill($pair['text']);
+            $changed = array_keys($post->getDirty());
+            if ($changed === []) {
+                $this->info("Unchanged {$slug}");
+
+                continue;
+            }
+
+            if (! $dryRun) {
+                $post->save();
+            }
+            $this->info(($dryRun ? 'Would refresh ' : 'Refreshed ').($post->status === PostStatus::Published ? 'live post ' : '')."{$slug} (".implode(', ', $changed).')');
+        }
+
+        if ($dryRun) {
+            $this->info('Dry run, nothing was written.');
+        }
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Reads one post's two files. English carries the date and the author,
+     * and Indonesian only fills them in when English leaves them out.
+     *
+     * @return array{text: array<string, string>, published_at: ?Carbon, author: mixed}
+     *
+     * @throws InvalidArgumentException When a file has no title or no description.
+     */
+    private function readPair(string $root, string $file): array
+    {
+        $text = [];
+        $publishedAt = null;
+        $author = null;
+
+        foreach (Post::LANGUAGES as $lang) {
+            $doc = YamlFrontMatter::parseFile("{$root}/{$lang}/{$file}");
+
+            foreach (['title', 'description'] as $key) {
+                if (blank($doc->matter($key))) {
+                    throw new InvalidArgumentException("{$lang}/{$file} has no {$key}.");
+                }
+            }
+
+            $text["title_{$lang}"] = trim($doc->matter('title'));
+            $text["description_{$lang}"] = trim($doc->matter('description'));
+            $text["body_{$lang}"] = trim(str_replace("\r\n", "\n", $doc->body()), "\n")."\n";
+
+            $publishedAt ??= $this->date($doc->matter('published'));
+            $author ??= $doc->matter('author');
+        }
+
+        return ['text' => $text, 'published_at' => $publishedAt, 'author' => $author];
     }
 
     private function resolve(string $path): ?string

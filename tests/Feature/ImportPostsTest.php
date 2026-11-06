@@ -3,14 +3,326 @@
 namespace Tests\Feature;
 
 use App\Enums\PostStatus;
+use App\Jobs\RebuildSite;
 use App\Models\Post;
+use App\Models\Tag;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class ImportPostsTest extends TestCase
 {
     use RefreshDatabase;
+
+    /** @var list<string> Folders made by stage(), removed after each test. */
+    private array $staged = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->staged as $dir) {
+            File::deleteDirectory($dir);
+        }
+
+        parent::tearDown();
+    }
+
+    /**
+     * Writes paired posts into a fresh folder shaped like the importer's
+     * input, `en/<slug>.md` and `id/<slug>.md`, and returns its path.
+     *
+     * @param  array<string, array<string, array<string, string>>>  $posts  slug => language => header fields plus `body`
+     */
+    private function stage(array $posts): string
+    {
+        $dir = storage_path('framework/testing/import-'.uniqid());
+        $this->staged[] = $dir;
+
+        foreach ($posts as $slug => $languages) {
+            foreach ($languages as $lang => $post) {
+                File::ensureDirectoryExists("{$dir}/{$lang}");
+
+                $header = collect($post)->except('body')->map(fn ($value, $key) => "{$key}: {$value}")->implode("\n");
+                File::put("{$dir}/{$lang}/{$slug}.md", "---\n{$header}\n---\n\n{$post['body']}\n");
+            }
+        }
+
+        return $dir;
+    }
+
+    /**
+     * One post in both languages. English carries any extra header fields
+     * such as the date and the author, as the importer expects.
+     *
+     * @param  array<string, string>  $english
+     * @return array<string, array<string, string>>
+     */
+    private function pair(string $title, string $body = 'Body text.', array $english = []): array
+    {
+        return [
+            'en' => ['title' => $title, 'description' => "About {$title}.", ...$english, 'body' => $body],
+            'id' => ['title' => "Judul {$title}", 'description' => "Tentang {$title}.", 'body' => "Isi {$body}"],
+        ];
+    }
+
+    public function test_the_default_import_publishes_a_pair_with_its_date_and_author(): void
+    {
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['published' => '2026-01-02', 'author' => 'A Writer'])]);
+
+        $this->artisan('posts:import', ['path' => $dir])->assertSuccessful();
+
+        $post = Post::where('slug', 'hello')->sole();
+        $this->assertSame(PostStatus::Published, $post->status);
+        $this->assertSame('2026-01-02', $post->published_at->toDateString());
+        $this->assertSame('A Writer', $post->author);
+        $this->assertSame('Hello', $post->title_en);
+        $this->assertSame('Judul Hello', $post->title_id);
+        $this->assertSame("Body text.\n", $post->body_en);
+        $this->assertSame("Isi Body text.\n", $post->body_id);
+    }
+
+    public function test_the_default_import_publishes_an_existing_draft_and_replaces_its_text(): void
+    {
+        Post::factory()->create(['slug' => 'hello', 'title_en' => 'Old title']);
+        $dir = $this->stage(['hello' => $this->pair('Hello')]);
+
+        $this->artisan('posts:import', ['path' => $dir])->assertSuccessful();
+
+        $post = Post::where('slug', 'hello')->sole();
+        $this->assertSame(PostStatus::Published, $post->status);
+        $this->assertNotNull($post->published_at);
+        $this->assertSame('Hello', $post->title_en);
+    }
+
+    /**
+     * Runs the command and returns its exit code and printed lines.
+     *
+     * @param  array<string, mixed>  $options
+     * @return array{0: int, 1: string}
+     */
+    private function importFrom(string $dir, array $options = []): array
+    {
+        $code = Artisan::call('posts:import', ['path' => $dir, ...$options]);
+
+        return [$code, Artisan::output()];
+    }
+
+    public function test_draft_creates_a_draft_with_no_date_and_starts_no_rebuild(): void
+    {
+        Bus::fake();
+        $dir = $this->stage(['hello' => $this->pair('Hello')]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('Created hello (draft)', $output);
+
+        $post = Post::where('slug', 'hello')->sole();
+        $this->assertSame(PostStatus::Draft, $post->status);
+        $this->assertNull($post->published_at);
+        $this->assertSame(Post::DEFAULT_AUTHOR, $post->author);
+        $this->assertSame('Judul Hello', $post->title_id);
+        $this->assertSame([], $post->missingLanguages());
+        Bus::assertNotDispatchedAfterResponse(RebuildSite::class);
+    }
+
+    public function test_draft_seeds_a_new_post_with_the_date_and_author_in_its_files(): void
+    {
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['published' => '2026-01-02', 'author' => 'A Writer'])]);
+
+        $this->importFrom($dir, ['--draft' => true]);
+
+        $post = Post::where('slug', 'hello')->sole();
+        $this->assertSame(PostStatus::Draft, $post->status);
+        $this->assertSame('2026-01-02', $post->published_at->toDateString());
+        $this->assertSame('A Writer', $post->author);
+    }
+
+    public function test_draft_refreshes_the_text_of_a_draft_and_nothing_else(): void
+    {
+        Bus::fake();
+        $tag = Tag::factory()->create();
+        $draft = Post::factory()->create([
+            'slug' => 'hello',
+            'author' => 'Someone Else',
+            'published_at' => '2026-02-03 10:00:00',
+        ]);
+        $draft->tags()->attach($tag);
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['published' => '2030-01-01', 'author' => 'File Author'])]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('Refreshed hello (title_en, description_en, body_en, title_id, description_id, body_id)', $output);
+
+        $draft->refresh();
+        $this->assertSame('Hello', $draft->title_en);
+        $this->assertSame("Isi Body text.\n", $draft->body_id);
+        $this->assertSame(PostStatus::Draft, $draft->status);
+        $this->assertSame('Someone Else', $draft->author);
+        $this->assertSame('2026-02-03 10:00:00', $draft->published_at->toDateTimeString());
+        $this->assertSame([$tag->id], $draft->tags()->pluck('tags.id')->all());
+        Bus::assertNotDispatchedAfterResponse(RebuildSite::class);
+
+        [, $again] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertStringContainsString('Unchanged hello', $again);
+        $this->assertSame(1, Post::count());
+    }
+
+    public function test_draft_refuses_the_whole_run_when_a_slug_is_published(): void
+    {
+        $live = Post::factory()->published()->create(['slug' => 'live-one', 'title_en' => 'Live title']);
+        $dir = $this->stage(['live-one' => $this->pair('Changed'), 'new-one' => $this->pair('New')]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('Refused live-one', $output);
+        $this->assertSame('Live title', $live->fresh()->title_en);
+        $this->assertFalse(Post::where('slug', 'new-one')->exists());
+    }
+
+    public function test_include_live_refreshes_a_published_post_and_starts_one_rebuild(): void
+    {
+        $live = Post::factory()->published('2026-01-02 08:00:00')->create(['slug' => 'live-one']);
+        $dir = $this->stage(['live-one' => $this->pair('Fixed')]);
+        Bus::fake();
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true, '--include-live' => true]);
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('Refreshed live post live-one (', $output);
+
+        $live->refresh();
+        $this->assertSame('Fixed', $live->title_en);
+        $this->assertSame(PostStatus::Published, $live->status);
+        $this->assertSame('2026-01-02 08:00:00', $live->published_at->toDateTimeString());
+        Bus::assertDispatchedAfterResponse(RebuildSite::class, 1);
+
+        Bus::fake();
+
+        [, $again] = $this->importFrom($dir, ['--draft' => true, '--include-live' => true]);
+
+        $this->assertStringContainsString('Unchanged live-one', $again);
+        Bus::assertNotDispatchedAfterResponse(RebuildSite::class);
+    }
+
+    public function test_include_live_still_saves_new_posts_and_existing_drafts_as_drafts(): void
+    {
+        Post::factory()->published()->create(['slug' => 'live-one']);
+        Post::factory()->create(['slug' => 'draft-one']);
+        $dir = $this->stage([
+            'live-one' => $this->pair('Live'),
+            'draft-one' => $this->pair('Draft'),
+            'new-one' => $this->pair('New'),
+        ]);
+        Bus::fake();
+
+        $this->importFrom($dir, ['--draft' => true, '--include-live' => true]);
+
+        $this->assertSame(PostStatus::Published, Post::where('slug', 'live-one')->sole()->status);
+        $this->assertSame(PostStatus::Draft, Post::where('slug', 'draft-one')->sole()->status);
+        $this->assertSame(PostStatus::Draft, Post::where('slug', 'new-one')->sole()->status);
+        Bus::assertDispatchedAfterResponse(RebuildSite::class, 1);
+    }
+
+    public function test_include_live_needs_draft(): void
+    {
+        $dir = $this->stage(['hello' => $this->pair('Hello')]);
+
+        [$code, $output] = $this->importFrom($dir, ['--include-live' => true]);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('--include-live only works together with --draft.', $output);
+        $this->assertSame(0, Post::count());
+    }
+
+    public function test_dry_run_writes_nothing_and_says_what_would_happen(): void
+    {
+        Post::factory()->create(['slug' => 'draft-one', 'title_en' => 'Old draft']);
+        $live = Post::factory()->published()->create(['slug' => 'live-one', 'title_en' => 'Old live']);
+        $dir = $this->stage([
+            'new-one' => $this->pair('New'),
+            'draft-one' => $this->pair('Draft'),
+            'live-one' => $this->pair('Live'),
+        ]);
+        Bus::fake();
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true, '--include-live' => true, '--dry-run' => true]);
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('Would create new-one (draft)', $output);
+        $this->assertStringContainsString('Would refresh draft-one (', $output);
+        $this->assertStringContainsString('Would refresh live post live-one (', $output);
+        $this->assertStringContainsString('Dry run, nothing was written.', $output);
+
+        $this->assertFalse(Post::where('slug', 'new-one')->exists());
+        $this->assertSame('Old draft', Post::where('slug', 'draft-one')->sole()->title_en);
+        $this->assertSame('Old live', $live->fresh()->title_en);
+        Bus::assertNotDispatchedAfterResponse(RebuildSite::class);
+    }
+
+    public function test_dry_run_fails_on_the_same_refusal_as_a_real_run(): void
+    {
+        Post::factory()->published()->create(['slug' => 'live-one']);
+        $dir = $this->stage(['live-one' => $this->pair('Live'), 'new-one' => $this->pair('New')]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true, '--dry-run' => true]);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('Refused live-one', $output);
+        $this->assertFalse(Post::where('slug', 'new-one')->exists());
+    }
+
+    public function test_dry_run_needs_draft(): void
+    {
+        $dir = $this->stage(['hello' => $this->pair('Hello')]);
+
+        [$code, $output] = $this->importFrom($dir, ['--dry-run' => true]);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('--dry-run only works together with --draft.', $output);
+        $this->assertSame(0, Post::count());
+    }
+
+    public function test_draft_reads_every_file_before_writing_any(): void
+    {
+        $broken = $this->pair('Broken');
+        unset($broken['id']['title']);
+        $dir = $this->stage(['broken' => $broken, 'fine' => $this->pair('Fine')]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('id/broken.md has no title.', $output);
+        $this->assertSame(0, Post::count());
+    }
+
+    public function test_draft_warns_about_a_style_problem_and_keeps_the_text(): void
+    {
+        $dir = $this->stage(['hello' => $this->pair('Hello', "One \u{2014} two.")]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('hello body_en', $output);
+        $this->assertStringContainsString("\u{2014}", Post::where('slug', 'hello')->sole()->body_en);
+    }
+
+    public function test_it_refuses_a_file_without_a_title(): void
+    {
+        $post = $this->pair('Hello');
+        unset($post['id']['title']);
+        $dir = $this->stage(['hello' => $post]);
+
+        $this->artisan('posts:import', ['path' => $dir])
+            ->expectsOutputToContain('id/hello.md has no title.')
+            ->assertFailed();
+
+        $this->assertSame(0, Post::count());
+    }
 
     public function test_it_imports_the_site_posts_as_published(): void
     {
