@@ -42,6 +42,13 @@ return [
         'url' => env('SITE_URL', 'https://konstelasi.co.id'),
     ],
 
+    // Where `posts:push` sends posts, and the token it signs in with. Made
+    // under API tokens in the admin. Only a machine that pushes needs them.
+    'blog_api' => [
+        'url' => env('BLOG_API_URL', 'https://blog.konstelasi.co.id'),
+        'token' => env('BLOG_API_TOKEN'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

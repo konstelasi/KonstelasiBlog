@@ -216,7 +216,17 @@ Posts can be created and updated without the admin, by a script that holds a tok
 
 An Admin makes one under API tokens in the menu, with a name, the abilities and a lifetime of 30 days, 90 days or a year. The token is shown once and only a hash of it is kept, so a lost token is revoked and replaced. A token starts with `kblog_` after its number, so a secret scanner can recognise one that was committed by mistake. Deleting an account deletes its tokens.
 
-A script sends `PUT /api/v1/posts/{slug}` with `Authorization: Bearer <token>`. It creates the post or updates it, and repeating a request changes nothing the second time. `GET /api/v1/posts/{slug}` reads a post of any status. A body has any of `status` (`draft` or `published`), `published_at`, `tags` (a list of tag slugs), and `en` and `id`, each with `title`, `description` and `body`. A field left out keeps its stored value, a field the API does not know is refused, and the text is stored exactly as sent. Add `?dry_run=1` to run every check and write nothing.
+The easiest way to use one is `posts:push`, which reads the same `en/` and `id/` folders as the import. Put the token in `.env` as `BLOG_API_TOKEN` (`BLOG_API_URL` defaults to the live blog).
+
+```bash
+php artisan posts:push some/path --dry-run
+php artisan posts:push some/path
+php artisan posts:push some/path --publish
+```
+
+Every post is checked first, and nothing is written unless all of them pass. Without `--publish` the status is left alone, so a new post is a draft and an existing post keeps its status. The `published` line becomes the post's date, the `tags` line sets its tags, and the `author` line is not sent, because the writer is the account behind the token. The token needs the Publish ability for `--publish` and for any post that is already live.
+
+Underneath it is one endpoint, `PUT /api/v1/posts/{slug}`, sent with `Authorization: Bearer <token>`. It creates the post or updates it, and repeating a request changes nothing the second time. `GET /api/v1/posts/{slug}` reads a post of any status. A body has any of `status` (`draft` or `published`), `published_at`, `tags` (a list of tag slugs), and `en` and `id`, each with `title`, `description` and `body`. A field left out keeps its stored value, a field the API does not know is refused, and the text is stored exactly as sent. Add `?dry_run=1` to run every check and write nothing.
 
 ```json
 {
