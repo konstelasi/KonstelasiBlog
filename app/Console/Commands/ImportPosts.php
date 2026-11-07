@@ -102,8 +102,10 @@ class ImportPosts extends Command
     /**
      * The `--draft` run. A pair with no post yet becomes a draft, seeded with
      * the date and author in its files. A pair whose slug is a draft has its
-     * six text fields refreshed and nothing else, so the date, author, tags
-     * and writer set in the admin stay. A slug that is published stops the
+     * six text fields refreshed, and its date too when the English file has a
+     * `published` line, so the file is where a date is planned. Without that
+     * line the date stays as the admin left it. The author, tags and writer
+     * set in the admin always stay. A slug that is published stops the
      * whole run before anything is written, so no draft run changes a live
      * page by accident. With `--include-live` a published post is refreshed
      * the same way, keeps its status and date, and the observer starts the
@@ -159,6 +161,10 @@ class ImportPosts extends Command
             }
 
             $post->fill($pair['text']);
+            // A live post keeps its date, because moving it reorders the public site.
+            if ($pair['published_at'] !== null && $post->status === PostStatus::Draft) {
+                $post->published_at = $pair['published_at'];
+            }
             $changed = array_keys($post->getDirty());
             if ($changed === []) {
                 $this->info("Unchanged {$slug}");
