@@ -212,7 +212,7 @@ That needs `GITHUB_DISPATCH_TOKEN` in the host's `.env`, a fine-grained GitHub t
 
 ## Writing posts through the API
 
-Posts can be created and updated without the admin, by a script that holds a token. A token stands for the account that made it, so it can do what that account can and no more, and its abilities narrow it further. Write drafts lets it create and update drafts, with their planned date and tags. Publish lets it also publish, take a live post back to draft and edit live posts, and it only works for an account that may publish.
+Posts can be created and updated without the admin, by a script that holds a token. A token stands for the account that made it, so it can do what that account can and no more, and its abilities narrow it further. Write drafts lets it create and update drafts, with their planned date and tags. Publish lets it also publish, take a live post back to draft and edit live posts, and it only works for an account that may publish. Manage tags lets it create tags and nothing else, so a token that writes drafts cannot change which tags a post may use.
 
 An Admin makes one under API tokens in the menu, with a name, the abilities and a lifetime of 30 days, 90 days or a year. The token is shown once and only a hash of it is kept, so a lost token is revoked and replaced. A token starts with `kblog_` after its number, so a secret scanner can recognise one that was committed by mistake. Deleting an account deletes its tokens.
 
@@ -226,6 +226,16 @@ php artisan posts:push some/path --publish
 
 Every post is checked first, and nothing is written unless all of them pass. Without `--publish` the status is left alone, so a new post is a draft and an existing post keeps its status. The `published` line becomes the post's date, the `tags` line sets its tags, and the `author` line is not sent, because the writer is the account behind the token. The token needs the Publish ability for `--publish` and for any post that is already live.
 
+A post can only use tags that exist, so a tag it names that is missing has to be created first. Put a `tags.yml` next to `en/` and `id/` that defines the tags you may need, each with its two names.
+
+```yaml
+software-development:
+  en: Software development
+  id: Pengembangan software
+```
+
+When a post names a tag that the blog does not have and `tags.yml` defines it, `posts:push` creates the tag before it writes the posts, which needs a token with the Manage tags ability. A slug with no definition stops the run, so a typo never makes a tag, and a definition that no post uses is ignored. A tag that was created stays even if a later post is refused, which does no harm, because a tag nobody uses shows nowhere.
+
 Underneath it is one endpoint, `PUT /api/v1/posts/{slug}`, sent with `Authorization: Bearer <token>`. It creates the post or updates it, and repeating a request changes nothing the second time. `GET /api/v1/posts/{slug}` reads a post of any status. A body has any of `status` (`draft` or `published`), `published_at`, `tags` (a list of tag slugs), and `en` and `id`, each with `title`, `description` and `body`. A field left out keeps its stored value, a field the API does not know is refused, and the text is stored exactly as sent. Add `?dry_run=1` to run every check and write nothing.
 
 ```json
@@ -237,7 +247,7 @@ Underneath it is one endpoint, `PUT /api/v1/posts/{slug}`, sent with `Authorizat
 }
 ```
 
-A date is RFC 3339 with a timezone and is stored in UTC. A post dated in the future has to stay a draft, so a request that publishes one is refused, and a draft can carry any date. A published post needs both languages complete and has to pass the house writing style, while a draft may break the style and only gets the problems back as warnings. The API never creates a tag, and an unknown slug is refused. A refusal is JSON with a message and a stable `code`.
+A date is RFC 3339 with a timezone and is stored in UTC. A post dated in the future has to stay a draft, so a request that publishes one is refused, and a draft can carry any date. A published post needs both languages complete and has to pass the house writing style, while a draft may break the style and only gets the problems back as warnings. A post only uses tags that exist, and an unknown slug is refused. A refusal is JSON with a message and a stable `code`.
 
 | Status | Code | Meaning |
 |---|---|---|
@@ -245,13 +255,16 @@ A date is RFC 3339 with a timezone and is stored in UTC. A post dated in the fut
 | 403 | `ability_missing` | The token lacks Publish for this write |
 | 403 | `not_allowed` | The account may not do this, such as a Writer publishing or editing someone else's draft |
 | 404 | `not_found` | `GET` of a slug that has no post |
+| 409 | `tag_exists` | A tag slug that exists under other names |
 | 422 | `future_date_requires_draft` | A published post with a date that has not come yet |
 | 422 | `language_incomplete` | A published post that misses a title, description or body in one language |
-| 422 | `house_style` | A published post whose text breaks the house style, with the problems by field |
+| 422 | `house_style` | A published post, or a tag name, whose text breaks the house style, with the problems by field |
 | 422 | `unknown_tag` | A tag slug that no tag has |
 | 429 | | More than 60 requests a minute from one token |
 
 An ordinary validation failure, such as a malformed date or more than six tags, is a 422 in Laravel's usual shape with the problems under `errors`. A write that touches a live post asks GitHub to rebuild the site, and the answer says so in `meta.site_rebuild`.
+
+Tags have endpoints of their own, because a post can only use tags that exist. `GET /api/v1/tags` lists them with both names, for a token that writes drafts or manages tags. `PUT /api/v1/tags/{slug}` creates one from a body of `en` and `id`, the two names, and it needs the Manage tags ability and an account that may manage tags. It only creates. The same names a second time change nothing, other names for an existing slug are refused with `tag_exists`, and renaming stays in the admin because a tag is printed on live posts. The names pass the house writing style, and `?dry_run=1` checks without writing.
 
 ## Deploying
 

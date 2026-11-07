@@ -71,11 +71,29 @@ class PushPostsTest extends TestCase
      * Answers like the API: a created post for a slug with no `existing`
      * mark, and an unchanged one otherwise.
      *
-     * @param  array<string, array{status: int, body: array<string, mixed>}>  $answers  By slug, to override the default.
+     * @param  array<string, array{status: int, body: array<string, mixed>}>  $answers  By post slug, or `tag:<slug>` for a tag, to override the default.
+     * @param  list<string>  $tags  The slugs the blog already has.
      */
-    private function fakeApi(array $answers = []): void
+    private function fakeApi(array $answers = [], array $tags = ['mysql', 'stardust']): void
     {
-        Http::fake(function (Request $request) use ($answers) {
+        Http::fake(function (Request $request) use ($answers, $tags) {
+            $dry = str_contains($request->url(), 'dry_run=1');
+
+            if (preg_match('#/api/v1/tags/([^/?]+)#', $request->url(), $match)) {
+                if (isset($answers["tag:{$match[1]}"])) {
+                    return Http::response($answers["tag:{$match[1]}"]['body'], $answers["tag:{$match[1]}"]['status']);
+                }
+
+                return Http::response([
+                    'data' => ['slug' => $match[1], 'en' => $request->data()['en'] ?? null, 'id' => $request->data()['id'] ?? null],
+                    'meta' => ['action' => 'created', 'dry_run' => $dry],
+                ], $dry ? 200 : 201);
+            }
+
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/api/v1/tags')) {
+                return Http::response(['data' => array_map(fn (string $slug): array => ['slug' => $slug, 'en' => $slug, 'id' => $slug], $tags)]);
+            }
+
             preg_match('#/api/v1/posts/([^/?]+)#', $request->url(), $match);
             $slug = $match[1];
 
@@ -261,6 +279,149 @@ class PushPostsTest extends TestCase
         }
 
         Http::assertNothingSent();
+    }
+
+    /** The requests made so far, as `METHOD path`, with `?dry` on the checks. */
+    private function requests(): array
+    {
+        return collect(Http::recorded())
+            ->map(fn (array $pair): string => $pair[0]->method().' '.parse_url($pair[0]->url(), PHP_URL_PATH).(str_contains($pair[0]->url(), 'dry_run=1') ? '?dry' : ''))
+            ->all();
+    }
+
+    private function tagsYaml(string $dir, string $yaml): void
+    {
+        File::put("{$dir}/tags.yml", $yaml);
+    }
+
+    public function test_it_creates_a_missing_tag_the_folder_defines_before_it_writes_the_posts(): void
+    {
+        $this->fakeApi(tags: ['mysql']);
+        $dir = $this->stage(['hello' => $this->pair('Hello', ['tags' => '[mysql, software-development]'])]);
+        $this->tagsYaml($dir, "software-development:\n  en: Software development\n  id: Pengembangan software\n");
+
+        [$code, $output] = $this->push($dir);
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('Created tag software-development', $output);
+        $this->assertStringContainsString('Created hello (draft)', $output);
+        $this->assertSame([
+            'GET /api/v1/tags',
+            'PUT /api/v1/tags/software-development?dry',
+            'PUT /api/v1/tags/software-development',
+            'PUT /api/v1/posts/hello?dry',
+            'PUT /api/v1/posts/hello',
+        ], $this->requests());
+        Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/api/v1/tags/software-development')
+            && $r->data() === ['en' => 'Software development', 'id' => 'Pengembangan software']);
+    }
+
+    public function test_a_tag_that_exists_is_not_sent_again_even_when_the_folder_defines_it(): void
+    {
+        $this->fakeApi(tags: ['mysql']);
+        $dir = $this->stage(['hello' => $this->pair('Hello', ['tags' => '[mysql]'])]);
+        $this->tagsYaml($dir, "mysql:\n  en: MySQL\n  id: MySQL\n");
+
+        $this->push($dir);
+
+        $this->assertNotContains('PUT /api/v1/tags/mysql', $this->requests());
+        $this->assertNotContains('PUT /api/v1/tags/mysql?dry', $this->requests());
+    }
+
+    public function test_a_tag_the_folder_does_not_define_stops_the_run_before_any_write(): void
+    {
+        $this->fakeApi(tags: ['mysql']);
+        $dir = $this->stage(['hello' => $this->pair('Hello', ['tags' => '[mysql, typo-tag]'])]);
+
+        [$code, $output] = $this->push($dir);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('No tag has the slug typo-tag, and tags.yml does not define it.', $output);
+        $this->assertStringContainsString('Nothing was pushed.', $output);
+        $this->assertSame(['GET /api/v1/tags'], $this->requests());
+    }
+
+    public function test_a_definition_no_post_uses_is_never_created(): void
+    {
+        $this->fakeApi();
+        $dir = $this->stage(['hello' => $this->pair('Hello', ['tags' => '[mysql]'])]);
+        $this->tagsYaml($dir, "unused:\n  en: Unused\n  id: Tidak dipakai\n");
+
+        $this->push($dir);
+
+        $this->assertNotContains('PUT /api/v1/tags/unused', $this->requests());
+        $this->assertNotContains('PUT /api/v1/tags/unused?dry', $this->requests());
+    }
+
+    public function test_a_dry_run_checks_the_new_tags_and_lets_their_posts_through_the_check(): void
+    {
+        $this->fakeApi(['hello' => [
+            'status' => 422,
+            'body' => ['message' => 'No tag has the slug software-development.', 'code' => 'unknown_tag'],
+        ]], tags: []);
+        $dir = $this->stage(['hello' => $this->pair('Hello', ['tags' => '[software-development]'])]);
+        $this->tagsYaml($dir, "software-development:\n  en: Software development\n  id: Pengembangan software\n");
+
+        [$code, $output] = $this->push($dir, ['--dry-run' => true]);
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('Would create tag software-development', $output);
+        $this->assertStringContainsString('Would push hello once its new tags exist', $output);
+        $this->assertStringContainsString('Dry run, nothing was written.', $output);
+        $this->assertSame([
+            'GET /api/v1/tags',
+            'PUT /api/v1/tags/software-development?dry',
+            'PUT /api/v1/posts/hello?dry',
+        ], $this->requests());
+    }
+
+    public function test_a_refused_tag_stops_the_run_before_any_tag_or_post_is_written(): void
+    {
+        $this->fakeApi(['tag:software-development' => [
+            'status' => 403,
+            'body' => ['message' => 'Your account may not create tags. Ask an Editor or an Admin.', 'code' => 'not_allowed'],
+        ]], tags: []);
+        $dir = $this->stage(['hello' => $this->pair('Hello', ['tags' => '[software-development]'])]);
+        $this->tagsYaml($dir, "software-development:\n  en: Software development\n  id: Pengembangan software\n");
+
+        [$code, $output] = $this->push($dir);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('Refused tag software-development (not_allowed)', $output);
+        $this->assertStringContainsString('Nothing was pushed.', $output);
+        $this->assertSame(['GET /api/v1/tags', 'PUT /api/v1/tags/software-development?dry'], $this->requests());
+    }
+
+    public function test_a_tags_file_that_is_not_valid_stops_the_run_before_any_request(): void
+    {
+        Http::fake();
+
+        foreach ([
+            "Bad_Slug:\n  en: A\n  id: B\n" => 'is not a slug',
+            "software-development:\n  en: Only English\n" => 'something other than an English and an Indonesian name',
+            "software-development:\n  en: ''\n  id: B\n" => 'has no en name',
+            "- just\n- a list\n" => 'must map each tag slug',
+            "software-development: [unclosed\n" => 'is not valid YAML',
+        ] as $yaml => $message) {
+            $dir = $this->stage(['hello' => $this->pair('Hello')]);
+            $this->tagsYaml($dir, $yaml);
+
+            [$code, $output] = $this->push($dir);
+
+            $this->assertSame(1, $code, $yaml);
+            $this->assertStringContainsString($message, $output, $yaml);
+        }
+
+        Http::assertNothingSent();
+    }
+
+    public function test_a_post_with_no_tags_line_makes_no_request_about_tags(): void
+    {
+        $this->fakeApi();
+
+        $this->push($this->stage(['hello' => $this->pair('Hello')]));
+
+        $this->assertNotContains('GET /api/v1/tags', $this->requests());
     }
 
     public function test_a_file_with_no_twin_stops_the_run(): void
