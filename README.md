@@ -133,7 +133,7 @@ To load posts without publishing them, add `--draft`.
 php artisan posts:import some/path --draft
 ```
 
-A pair with no post yet is saved as a draft. Its date and author come from the `published` and `author` lines at the top of the English file, and stay empty or default when those lines are missing. A pair whose slug already belongs to a draft refreshes that draft's titles, descriptions and bodies in both languages, so whatever was edited in those six fields in the admin is replaced by the file. When the English file has a `published` line, the draft's date is set from it on every run, which makes the file the place to plan a date, and the draft can be published later without touching the date field. A date is read as UTC, so `published: 2026-11-17` means midnight UTC and `published: "2026-11-17 01:00"` means 01:00 UTC, which is 08:00 WIB. Without that line the draft keeps whatever date it has. The author and tags set in the admin always stay as they are. A slug that belongs to a published post stops the whole run before anything is written, so `--draft` alone never changes a live page.
+A pair with no post yet is saved as a draft. Its date and author come from the `published` and `author` lines at the top of the English file, and stay empty or default when those lines are missing. A pair whose slug already belongs to a draft refreshes that draft's titles, descriptions and bodies in both languages, so whatever was edited in those six fields in the admin is replaced by the file. When the English file has a `published` line, the draft's date is set from it on every run, which makes the file the place to plan a date, and the draft can be published later without touching the date field. A date is read as UTC, so `published: 2026-11-17` means midnight UTC and `published: "2026-11-17 01:00"` means 01:00 UTC, which is 08:00 WIB. Without that line the draft keeps whatever date it has. The author, writer and tags set in the admin stay as they are, unless `--writer` is added. A slug that belongs to a published post stops the whole run before anything is written, so `--draft` alone never changes a live page.
 
 To refresh the text of a live post too, add `--include-live` next to `--draft`.
 
@@ -150,6 +150,14 @@ php artisan posts:import some/path --draft --dry-run
 ```
 
 It reads the same files, decides the same way and refuses for the same reasons, and it writes nothing and starts no rebuild. Its lines read `Would create` and `Would refresh`, the second with the fields that would change. It needs `--draft` too.
+
+To make the drafts belong to an account, add `--writer` with the email that account signs in with.
+
+```bash
+php artisan posts:import some/path --draft --writer=you@example.com
+```
+
+A new draft is created with that account as its writer, and a draft that has no writer yet is linked to it. Either way the account's name is stored as the author text and shown to readers as the byline, and the `author` line in the file is ignored. A draft that already has a writer keeps it, and a published post is never changed. An email that matches no account stops the whole run before anything is written. The flag needs `--draft`, and `--dry-run` shows which drafts would be linked.
 
 Each slug gets one line of output, `Created` for a new draft, `Refreshed` with the fields that changed, or `Unchanged`. The text is kept as written, and a line that breaks the house writing style is reported as a warning, because the admin asks for it to be fixed when someone saves the post.
 

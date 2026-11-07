@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\PostStatus;
 use App\Models\Post;
+use App\Models\User;
 use App\Rules\HouseStyle;
 use DateTimeInterface;
 use Illuminate\Console\Attributes\Description;
@@ -24,13 +25,14 @@ use Spatie\YamlFrontMatter\YamlFrontMatter;
     {path=../src/content/blog : Folder that holds the en/ and id/ folders, relative to this app}
     {--draft : Save new posts as drafts and refresh the text of existing drafts, never publishing}
     {--include-live : With --draft, also refresh the text of posts that are already published}
-    {--dry-run : With --draft, print what each post would do and write nothing}')]
+    {--dry-run : With --draft, print what each post would do and write nothing}
+    {--writer= : With --draft, link new drafts and drafts with no writer to the account with this email}')]
 #[Description('Import paired English and Indonesian Markdown posts as published posts, or as drafts with --draft')]
 class ImportPosts extends Command
 {
     public function handle(): int
     {
-        foreach (['include-live', 'dry-run'] as $flag) {
+        foreach (['include-live', 'dry-run', 'writer'] as $flag) {
             if ($this->option($flag) && ! $this->option('draft')) {
                 $this->error("--{$flag} only works together with --draft.");
 
@@ -104,9 +106,11 @@ class ImportPosts extends Command
      * the date and author in its files. A pair whose slug is a draft has its
      * six text fields refreshed, and its date too when the English file has a
      * `published` line, so the file is where a date is planned. Without that
-     * line the date stays as the admin left it. The author, tags and writer
-     * set in the admin always stay. A slug that is published stops the
-     * whole run before anything is written, so no draft run changes a live
+     * line the date stays as the admin left it. The author, writer and tags
+     * set in the admin stay, except that `--writer` links a new draft, and a
+     * draft that has no writer yet, to that account and stores the account's
+     * name as its author text, as the admin's create page does. A slug that
+     * is published stops the whole run before anything is written, so no draft run changes a live
      * page by accident. With `--include-live` a published post is refreshed
      * the same way, keeps its status and date, and the observer starts the
      * site rebuild when its text really changed. With `--dry-run` the run
@@ -132,6 +136,17 @@ class ImportPosts extends Command
             return self::FAILURE;
         }
 
+        $writer = null;
+        if (filled($this->option('writer'))) {
+            $email = (string) $this->option('writer');
+            $writer = User::where('email', $email)->first();
+            if ($writer === null) {
+                $this->error("No account has the email {$email}. Nothing was imported.");
+
+                return self::FAILURE;
+            }
+        }
+
         $live = array_keys(array_filter($existing, fn (?Post $post) => $post?->status === PostStatus::Published));
         if ($live && ! $this->option('include-live')) {
             foreach ($live as $slug) {
@@ -152,7 +167,8 @@ class ImportPosts extends Command
                         'status' => PostStatus::Draft,
                         ...$pair['text'],
                         'published_at' => $pair['published_at'],
-                        'author' => filled($pair['author']) ? $pair['author'] : Post::DEFAULT_AUTHOR,
+                        'author' => $writer?->name ?? (filled($pair['author']) ? $pair['author'] : Post::DEFAULT_AUTHOR),
+                        'user_id' => $writer?->getKey(),
                     ]);
                 }
                 $this->info(($dryRun ? 'Would create ' : 'Created ')."{$slug} (draft)");
@@ -161,9 +177,15 @@ class ImportPosts extends Command
             }
 
             $post->fill($pair['text']);
-            // A live post keeps its date, because moving it reorders the public site.
-            if ($pair['published_at'] !== null && $post->status === PostStatus::Draft) {
-                $post->published_at = $pair['published_at'];
+            // A live post keeps its date and writer, because both change what the public site shows.
+            if ($post->status === PostStatus::Draft) {
+                if ($pair['published_at'] !== null) {
+                    $post->published_at = $pair['published_at'];
+                }
+                if ($writer !== null && $post->user_id === null) {
+                    $post->user_id = $writer->getKey();
+                    $post->author = $writer->name;
+                }
             }
             $changed = array_keys($post->getDirty());
             if ($changed === []) {

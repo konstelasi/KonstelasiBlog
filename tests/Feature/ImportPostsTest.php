@@ -6,6 +6,7 @@ use App\Enums\PostStatus;
 use App\Jobs\RebuildSite;
 use App\Models\Post;
 use App\Models\Tag;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
@@ -234,6 +235,108 @@ class ImportPostsTest extends TestCase
         $live->refresh();
         $this->assertSame('Fixed', $live->title_en);
         $this->assertSame('2026-01-02 08:00:00', $live->published_at->toDateTimeString());
+    }
+
+    public function test_writer_links_a_new_draft_to_the_account_and_ignores_the_author_line(): void
+    {
+        $user = User::factory()->create(['name' => 'Damar', 'email' => 'damar@example.test']);
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['author' => 'File Author'])]);
+
+        [$code] = $this->importFrom($dir, ['--draft' => true, '--writer' => 'damar@example.test']);
+
+        $this->assertSame(0, $code);
+        $post = Post::where('slug', 'hello')->sole();
+        $this->assertSame($user->id, $post->user_id);
+        $this->assertSame('Damar', $post->author);
+        $this->assertSame('Damar', $post->byline());
+        $this->assertSame(PostStatus::Draft, $post->status);
+    }
+
+    public function test_writer_links_a_draft_that_has_no_writer(): void
+    {
+        $user = User::factory()->create(['name' => 'Damar', 'email' => 'damar@example.test']);
+        $draft = Post::factory()->create(['slug' => 'hello', 'author' => 'Damar Maulana', 'user_id' => null]);
+        $dir = $this->stage(['hello' => $this->pair('Hello')]);
+
+        [, $output] = $this->importFrom($dir, ['--draft' => true, '--writer' => 'damar@example.test']);
+
+        $this->assertMatchesRegularExpression('/Refreshed hello \([^)]*\buser_id\b[^)]*\)/', $output);
+        $this->assertMatchesRegularExpression('/Refreshed hello \([^)]*\bauthor\b[^)]*\)/', $output);
+        $draft->refresh();
+        $this->assertSame($user->id, $draft->user_id);
+        $this->assertSame('Damar', $draft->author);
+        $this->assertSame('Damar', $draft->byline());
+
+        [, $again] = $this->importFrom($dir, ['--draft' => true, '--writer' => 'damar@example.test']);
+
+        $this->assertStringContainsString('Unchanged hello', $again);
+    }
+
+    public function test_writer_keeps_the_writer_a_draft_already_has(): void
+    {
+        $owner = User::factory()->create(['name' => 'Owner']);
+        User::factory()->create(['email' => 'damar@example.test']);
+        $draft = Post::factory()->create(['slug' => 'hello', 'author' => 'Owner', 'user_id' => $owner->id]);
+        $dir = $this->stage(['hello' => $this->pair('Hello')]);
+
+        $this->importFrom($dir, ['--draft' => true, '--writer' => 'damar@example.test']);
+
+        $draft->refresh();
+        $this->assertSame($owner->id, $draft->user_id);
+        $this->assertSame('Owner', $draft->author);
+        $this->assertSame('Hello', $draft->title_en);
+    }
+
+    public function test_writer_leaves_a_published_post_alone_with_include_live(): void
+    {
+        User::factory()->create(['name' => 'Damar', 'email' => 'damar@example.test']);
+        $live = Post::factory()->published('2026-01-02 08:00:00')->create(['slug' => 'live-one', 'author' => 'Old Name', 'user_id' => null]);
+        $dir = $this->stage(['live-one' => $this->pair('Fixed')]);
+        Bus::fake();
+
+        $this->importFrom($dir, ['--draft' => true, '--include-live' => true, '--writer' => 'damar@example.test']);
+
+        $live->refresh();
+        $this->assertSame('Fixed', $live->title_en);
+        $this->assertNull($live->user_id);
+        $this->assertSame('Old Name', $live->author);
+    }
+
+    public function test_an_unknown_writer_email_refuses_the_whole_run_and_writes_nothing(): void
+    {
+        $dir = $this->stage(['hello' => $this->pair('Hello')]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true, '--writer' => 'nobody@example.test']);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('No account has the email nobody@example.test', $output);
+        $this->assertFalse(Post::where('slug', 'hello')->exists());
+    }
+
+    public function test_dry_run_names_the_writer_fields_it_would_set_and_writes_nothing(): void
+    {
+        User::factory()->create(['email' => 'damar@example.test']);
+        $draft = Post::factory()->create(['slug' => 'hello', 'author' => 'Damar Maulana', 'user_id' => null]);
+        $dir = $this->stage(['hello' => $this->pair('Hello'), 'fresh' => $this->pair('Fresh')]);
+
+        [, $output] = $this->importFrom($dir, ['--draft' => true, '--dry-run' => true, '--writer' => 'damar@example.test']);
+
+        $this->assertMatchesRegularExpression('/Would refresh hello \([^)]*\buser_id\b[^)]*\)/', $output);
+        $this->assertMatchesRegularExpression('/Would refresh hello \([^)]*\bauthor\b[^)]*\)/', $output);
+        $this->assertStringContainsString('Would create fresh (draft)', $output);
+        $this->assertNull($draft->refresh()->user_id);
+        $this->assertFalse(Post::where('slug', 'fresh')->exists());
+    }
+
+    public function test_writer_needs_draft(): void
+    {
+        $dir = $this->stage(['hello' => $this->pair('Hello')]);
+
+        [$code, $output] = $this->importFrom($dir, ['--writer' => 'damar@example.test']);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('--writer only works together with --draft.', $output);
+        $this->assertSame(0, Post::count());
     }
 
     public function test_draft_refuses_the_whole_run_when_a_slug_is_published(): void
