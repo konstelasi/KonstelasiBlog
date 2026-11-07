@@ -139,7 +139,7 @@ class ImportPostsTest extends TestCase
         $this->assertSame('A Writer', $post->author);
     }
 
-    public function test_draft_refreshes_the_text_of_a_draft_and_nothing_else(): void
+    public function test_draft_refreshes_the_text_of_a_draft_and_leaves_the_rest_when_the_file_has_no_date(): void
     {
         Bus::fake();
         $tag = Tag::factory()->create();
@@ -149,7 +149,7 @@ class ImportPostsTest extends TestCase
             'published_at' => '2026-02-03 10:00:00',
         ]);
         $draft->tags()->attach($tag);
-        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['published' => '2030-01-01', 'author' => 'File Author'])]);
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['author' => 'File Author'])]);
 
         [$code, $output] = $this->importFrom($dir, ['--draft' => true]);
 
@@ -169,6 +169,71 @@ class ImportPostsTest extends TestCase
 
         $this->assertStringContainsString('Unchanged hello', $again);
         $this->assertSame(1, Post::count());
+    }
+
+    public function test_draft_sets_the_date_of_a_draft_from_its_file_and_keeps_the_rest(): void
+    {
+        Bus::fake();
+        $tag = Tag::factory()->create();
+        $draft = Post::factory()->create([
+            'slug' => 'hello',
+            'author' => 'Someone Else',
+            'published_at' => null,
+        ]);
+        $draft->tags()->attach($tag);
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['published' => '"2026-11-17 01:00"', 'author' => 'File Author'])]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('Refreshed hello (', $output);
+        $this->assertStringContainsString('published_at', $output);
+
+        $draft->refresh();
+        $this->assertSame('2026-11-17 01:00:00', $draft->published_at->toDateTimeString());
+        $this->assertSame(PostStatus::Draft, $draft->status);
+        $this->assertSame('Someone Else', $draft->author);
+        $this->assertSame([$tag->id], $draft->tags()->pluck('tags.id')->all());
+        Bus::assertNotDispatchedAfterResponse(RebuildSite::class);
+
+        [, $again] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertStringContainsString('Unchanged hello', $again);
+    }
+
+    public function test_draft_replaces_a_date_set_in_the_admin_when_the_file_has_one(): void
+    {
+        $draft = Post::factory()->create(['slug' => 'hello', 'published_at' => '2026-02-03 10:00:00']);
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['published' => '2026-12-01'])]);
+
+        $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertSame('2026-12-01 00:00:00', $draft->refresh()->published_at->toDateTimeString());
+    }
+
+    public function test_dry_run_names_the_date_it_would_set_and_writes_nothing(): void
+    {
+        $draft = Post::factory()->create(['slug' => 'hello', 'published_at' => null]);
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['published' => '2026-12-01'])]);
+
+        [, $output] = $this->importFrom($dir, ['--draft' => true, '--dry-run' => true]);
+
+        $this->assertStringContainsString('Would refresh hello (', $output);
+        $this->assertStringContainsString('published_at', $output);
+        $this->assertNull($draft->refresh()->published_at);
+    }
+
+    public function test_include_live_keeps_the_date_of_a_published_post_whatever_the_file_says(): void
+    {
+        $live = Post::factory()->published('2026-01-02 08:00:00')->create(['slug' => 'live-one']);
+        $dir = $this->stage(['live-one' => $this->pair('Fixed', english: ['published' => '2030-01-01'])]);
+        Bus::fake();
+
+        $this->importFrom($dir, ['--draft' => true, '--include-live' => true]);
+
+        $live->refresh();
+        $this->assertSame('Fixed', $live->title_en);
+        $this->assertSame('2026-01-02 08:00:00', $live->published_at->toDateTimeString());
     }
 
     public function test_draft_refuses_the_whole_run_when_a_slug_is_published(): void
