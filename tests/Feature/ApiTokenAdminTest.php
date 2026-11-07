@@ -77,6 +77,20 @@ class ApiTokenAdminTest extends TestCase
         $this->assertSame(0, ApiToken::count());
     }
 
+    public function test_a_token_may_hold_the_tag_ability_alone_or_with_writing(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        foreach ([['tags:manage'], ['posts:write', 'tags:manage']] as $abilities) {
+            Livewire::test(CreateApiToken::class)
+                ->fillForm(['name' => 'Tags', 'abilities' => $abilities, 'expires_in' => 30])
+                ->call('create')
+                ->assertHasNoFormErrors();
+        }
+
+        $this->assertSame([['tags:manage'], ['posts:write', 'tags:manage']], ApiToken::orderBy('id')->get()->map->abilities->all());
+    }
+
     public function test_a_token_needs_a_name_and_an_ability(): void
     {
         $this->actingAs(User::factory()->admin()->create());
