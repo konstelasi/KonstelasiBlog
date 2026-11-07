@@ -44,6 +44,8 @@ final class Rbac
 
     public const TAG_MANAGE = 'tag.manage';
 
+    public const TOKEN_MANAGE = 'token.manage';
+
     /**
      * What each permission lets a person do, in the words the profile page
      * uses. A new permission needs a sentence here (a test checks).
@@ -60,6 +62,7 @@ final class Rbac
         self::POST_PUBLISH => 'Publish and unpublish posts, and set their date.',
         self::TAG_MANAGE => 'Create, rename and delete tags.',
         self::USER_MANAGE => 'Manage accounts and roles.',
+        self::TOKEN_MANAGE => 'Create and revoke API tokens.',
     ];
 
     /** @var list<string> */
@@ -90,7 +93,7 @@ final class Rbac
         return [
             self::WRITER => $writer,
             self::EDITOR => $editor,
-            self::ADMIN => [...$editor, self::USER_MANAGE],
+            self::ADMIN => [...$editor, self::USER_MANAGE, self::TOKEN_MANAGE],
         ];
     }
 

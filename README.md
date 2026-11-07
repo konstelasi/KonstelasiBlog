@@ -60,6 +60,7 @@ Every account has one role. Admin, Editor and Writer are defined in `app/Support
 | Pick tags on a post | yes | yes | yes |
 | Create, rename and delete tags | no | yes | yes |
 | Manage accounts and roles | no | no | yes |
+| Create and revoke API tokens | no | no | yes |
 
 Everyone can read every post. A Writer opens their own drafts to edit and everyone else's posts, and their own once they are live, in a read-only view, because changing a live post changes the public site. A post that was imported has no writer, so it is edited by Editors and Admins. An account with no role cannot sign in to the admin, and gets a 403 page if it tries.
 
@@ -208,6 +209,12 @@ That needs `GITHUB_DISPATCH_TOKEN` in the host's `.env`, a fine-grained GitHub t
 ```
 
 `tags` is an empty array for a post without tags, and its entries are in alphabetical order of the English name. It needs no key, since everything in it is public on the site anyway. Drafts never appear in it. Like any Laravel API it allows 60 requests a minute from one address.
+
+## Writing posts through the API
+
+Posts can be created and updated without the admin, by a script that holds a token. A token stands for the account that made it, so it can do what that account can and no more, and its abilities narrow it further. Write drafts lets it create and update drafts, with their planned date and tags. Publish lets it also publish, take a live post back to draft and edit live posts, and it only works for an account that may publish.
+
+An Admin makes one under API tokens in the menu, with a name, the abilities and a lifetime of 30 days, 90 days or a year. The token is shown once and only a hash of it is kept, so a lost token is revoked and replaced. A token starts with `kblog_` after its number, so a secret scanner can recognise one that was committed by mistake. Deleting an account deletes its tokens.
 
 ## Deploying
 
