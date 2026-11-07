@@ -97,7 +97,9 @@ class ProfileOverviewTest extends TestCase
         $this->assertNotContains(Rbac::SENTENCES[Rbac::POST_PUBLISH], $writer);
         $this->assertContains(Rbac::SENTENCES[Rbac::POST_PUBLISH], $editor);
         $this->assertNotContains(Rbac::SENTENCES[Rbac::USER_MANAGE], $editor);
-        $this->assertSame(Rbac::SENTENCES[Rbac::USER_MANAGE], $admin->abilities()[array_key_last($admin->abilities())]);
+        $this->assertContains(Rbac::SENTENCES[Rbac::USER_MANAGE], $admin->abilities());
+        $this->assertNotContains(Rbac::SENTENCES[Rbac::TOKEN_MANAGE], $editor);
+        $this->assertSame(Rbac::SENTENCES[Rbac::TOKEN_MANAGE], $admin->abilities()[array_key_last($admin->abilities())]);
         $this->assertSame('Admin', $admin->roleName());
     }
 

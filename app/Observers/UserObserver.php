@@ -12,6 +12,12 @@ use App\Models\User;
  */
 class UserObserver
 {
+    /** A deleted account takes its API tokens with it, so none is left that acts as nobody. */
+    public function deleting(User $user): void
+    {
+        $user->tokens()->delete();
+    }
+
     public function saved(User $user): void
     {
         if ($user->wasChanged('name') && $user->posts()->published()->exists()) {

@@ -26,7 +26,7 @@ class RbacTest extends TestCase
         return [
             'writer' => ['writer', $writer],
             'editor' => ['editor', $editor],
-            'admin' => ['admin', [...$editor, 'user.manage']],
+            'admin' => ['admin', [...$editor, 'user.manage', 'token.manage']],
         ];
     }
 

@@ -1,6 +1,6 @@
 # Konstelasi blog admin
 
-The place where we write the Konstelasi blog. It runs at `blog.konstelasi.co.id` and has two parts, an admin at `/admin` built with [Filament](https://filamentphp.com) and a read-only API at `/api/posts`. It's a Laravel 13 app on MariaDB.
+The place where we write the Konstelasi blog. It runs at `blog.konstelasi.co.id` and has two parts, an admin at `/admin` built with [Filament](https://filamentphp.com) and an API, a public read-only list at `/api/posts` and an authoring API under `/api/v1` for tokens. It's a Laravel 13 app on MariaDB.
 
 Readers never come here. The posts appear on [konstelasi.co.id/blog/](https://konstelasi.co.id/blog/), which is the static Astro site in the parent folder. That site asks this app for its posts when it builds, so a post reaches readers only after the site has been rebuilt. Anyone who opens `blog.konstelasi.co.id` itself is sent on to the public blog, and the whole host asks search engines to stay away.
 
@@ -60,6 +60,7 @@ Every account has one role. Admin, Editor and Writer are defined in `app/Support
 | Pick tags on a post | yes | yes | yes |
 | Create, rename and delete tags | no | yes | yes |
 | Manage accounts and roles | no | no | yes |
+| Create and revoke API tokens | no | no | yes |
 
 Everyone can read every post. A Writer opens their own drafts to edit and everyone else's posts, and their own once they are live, in a read-only view, because changing a live post changes the public site. A post that was imported has no writer, so it is edited by Editors and Admins. An account with no role cannot sign in to the admin, and gets a 403 page if it tries.
 
@@ -208,6 +209,49 @@ That needs `GITHUB_DISPATCH_TOKEN` in the host's `.env`, a fine-grained GitHub t
 ```
 
 `tags` is an empty array for a post without tags, and its entries are in alphabetical order of the English name. It needs no key, since everything in it is public on the site anyway. Drafts never appear in it. Like any Laravel API it allows 60 requests a minute from one address.
+
+## Writing posts through the API
+
+Posts can be created and updated without the admin, by a script that holds a token. A token stands for the account that made it, so it can do what that account can and no more, and its abilities narrow it further. Write drafts lets it create and update drafts, with their planned date and tags. Publish lets it also publish, take a live post back to draft and edit live posts, and it only works for an account that may publish.
+
+An Admin makes one under API tokens in the menu, with a name, the abilities and a lifetime of 30 days, 90 days or a year. The token is shown once and only a hash of it is kept, so a lost token is revoked and replaced. A token starts with `kblog_` after its number, so a secret scanner can recognise one that was committed by mistake. Deleting an account deletes its tokens.
+
+The easiest way to use one is `posts:push`, which reads the same `en/` and `id/` folders as the import. Put the token in `.env` as `BLOG_API_TOKEN` (`BLOG_API_URL` defaults to the live blog).
+
+```bash
+php artisan posts:push some/path --dry-run
+php artisan posts:push some/path
+php artisan posts:push some/path --publish
+```
+
+Every post is checked first, and nothing is written unless all of them pass. Without `--publish` the status is left alone, so a new post is a draft and an existing post keeps its status. The `published` line becomes the post's date, the `tags` line sets its tags, and the `author` line is not sent, because the writer is the account behind the token. The token needs the Publish ability for `--publish` and for any post that is already live.
+
+Underneath it is one endpoint, `PUT /api/v1/posts/{slug}`, sent with `Authorization: Bearer <token>`. It creates the post or updates it, and repeating a request changes nothing the second time. `GET /api/v1/posts/{slug}` reads a post of any status. A body has any of `status` (`draft` or `published`), `published_at`, `tags` (a list of tag slugs), and `en` and `id`, each with `title`, `description` and `body`. A field left out keeps its stored value, a field the API does not know is refused, and the text is stored exactly as sent. Add `?dry_run=1` to run every check and write nothing.
+
+```json
+{
+  "published_at": "2026-11-17T01:00:00Z",
+  "tags": ["mysql", "stardust"],
+  "en": { "title": "...", "description": "...", "body": "..." },
+  "id": { "title": "...", "description": "...", "body": "..." }
+}
+```
+
+A date is RFC 3339 with a timezone and is stored in UTC. A post dated in the future has to stay a draft, so a request that publishes one is refused, and a draft can carry any date. A published post needs both languages complete and has to pass the house writing style, while a draft may break the style and only gets the problems back as warnings. The API never creates a tag, and an unknown slug is refused. A refusal is JSON with a message and a stable `code`.
+
+| Status | Code | Meaning |
+|---|---|---|
+| 401 | | No token, or one that expired or was revoked |
+| 403 | `ability_missing` | The token lacks Publish for this write |
+| 403 | `not_allowed` | The account may not do this, such as a Writer publishing or editing someone else's draft |
+| 404 | `not_found` | `GET` of a slug that has no post |
+| 422 | `future_date_requires_draft` | A published post with a date that has not come yet |
+| 422 | `language_incomplete` | A published post that misses a title, description or body in one language |
+| 422 | `house_style` | A published post whose text breaks the house style, with the problems by field |
+| 422 | `unknown_tag` | A tag slug that no tag has |
+| 429 | | More than 60 requests a minute from one token |
+
+An ordinary validation failure, such as a malformed date or more than six tags, is a 422 in Laravel's usual shape with the problems under `errors`. A write that touches a live post asks GitHub to rebuild the site, and the answer says so in `meta.site_rebuild`.
 
 ## Deploying
 

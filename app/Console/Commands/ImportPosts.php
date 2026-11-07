@@ -7,13 +7,11 @@ use App\Models\Post;
 use App\Models\Tag;
 use App\Models\User;
 use App\Rules\HouseStyle;
-use DateTimeInterface;
+use App\Support\PostFiles;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Illuminate\Support\Carbon;
 use InvalidArgumentException;
-use Spatie\YamlFrontMatter\YamlFrontMatter;
 
 /**
  * Reads the posts that the Astro site kept as Markdown, one file per
@@ -31,9 +29,6 @@ use Spatie\YamlFrontMatter\YamlFrontMatter;
 #[Description('Import paired English and Indonesian Markdown posts as published posts, or as drafts with --draft')]
 class ImportPosts extends Command
 {
-    /** The limit of the post form's tag picker, so a file cannot ask for more than the admin allows. */
-    private const MAX_TAGS = 6;
-
     public function handle(): int
     {
         foreach (['include-live', 'dry-run', 'writer'] as $flag) {
@@ -44,22 +39,16 @@ class ImportPosts extends Command
             }
         }
 
-        $root = $this->resolve($this->argument('path'));
+        $root = PostFiles::resolve($this->argument('path'));
         if ($root === null) {
             $this->error("No en/ and id/ folders found under {$this->argument('path')}.");
 
             return self::FAILURE;
         }
 
-        $files = [];
-        foreach (Post::LANGUAGES as $lang) {
-            $files[$lang] = array_map('basename', glob("{$root}/{$lang}/*.md") ?: []);
-        }
+        $files = PostFiles::listing($root);
 
-        $unpaired = array_merge(
-            array_map(fn ($f) => "en/{$f} has no id/{$f}", array_diff($files['en'], $files['id'])),
-            array_map(fn ($f) => "id/{$f} has no en/{$f}", array_diff($files['id'], $files['en'])),
-        );
+        $unpaired = PostFiles::unpaired($files);
         if ($unpaired) {
             foreach ($unpaired as $line) {
                 $this->error($line);
@@ -82,7 +71,7 @@ class ImportPosts extends Command
             $slug = basename($file, '.md');
 
             try {
-                $pair = $this->readPair($root, $file);
+                $pair = PostFiles::readPair($root, $file, withTags: false);
             } catch (InvalidArgumentException $e) {
                 $this->error($e->getMessage());
 
@@ -140,7 +129,7 @@ class ImportPosts extends Command
         try {
             foreach ($files as $file) {
                 $slug = basename($file, '.md');
-                $pairs[$slug] = $this->readPair($root, $file);
+                $pairs[$slug] = PostFiles::readPair($root, $file);
                 $existing[$slug] = Post::where('slug', $slug)->first();
             }
         } catch (InvalidArgumentException $e) {
@@ -253,106 +242,6 @@ class ImportPosts extends Command
         }
 
         return self::SUCCESS;
-    }
-
-    /**
-     * Reads one post's two files. English carries the date, the author and
-     * the tags, and Indonesian only fills them in when English leaves them
-     * out. `tags` is null when neither file has the line, which is different
-     * from an empty list, because the first leaves a draft's tags alone and
-     * the second clears them.
-     *
-     * @return array{text: array<string, string>, published_at: ?Carbon, author: mixed, tags: ?list<string>}
-     *
-     * @throws InvalidArgumentException When a file has no title or no description, or a bad `tags` line.
-     */
-    private function readPair(string $root, string $file): array
-    {
-        $text = [];
-        $publishedAt = null;
-        $author = null;
-        $tags = null;
-
-        foreach (Post::LANGUAGES as $lang) {
-            $doc = YamlFrontMatter::parseFile("{$root}/{$lang}/{$file}");
-
-            foreach (['title', 'description'] as $key) {
-                if (blank($doc->matter($key))) {
-                    throw new InvalidArgumentException("{$lang}/{$file} has no {$key}.");
-                }
-            }
-
-            $text["title_{$lang}"] = trim($doc->matter('title'));
-            $text["description_{$lang}"] = trim($doc->matter('description'));
-            $text["body_{$lang}"] = trim(str_replace("\r\n", "\n", $doc->body()), "\n")."\n";
-
-            $publishedAt ??= $this->date($doc->matter('published'));
-            $author ??= $doc->matter('author');
-            // The default import publishes and never reads tags, so a bad line only matters with --draft.
-            $tags ??= $this->option('draft') ? $this->tagSlugs($doc->matter('tags'), "{$lang}/{$file}") : null;
-        }
-
-        return ['text' => $text, 'published_at' => $publishedAt, 'author' => $author, 'tags' => $tags];
-    }
-
-    /**
-     * A `tags` line is a YAML list of tag slugs, such as `tags: [mysql, stardust]`.
-     * A repeated slug counts once.
-     *
-     * @return ?list<string> Null when the file has no `tags` line.
-     *
-     * @throws InvalidArgumentException When the line is not a list of slugs, or lists more than the post form allows.
-     */
-    private function tagSlugs(mixed $value, string $where): ?array
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        if (! is_array($value) || ! array_is_list($value)) {
-            throw new InvalidArgumentException("{$where} has a tags line that is not a list of tag slugs.");
-        }
-
-        $slugs = [];
-        foreach ($value as $slug) {
-            if (! is_string($slug) || trim($slug) === '') {
-                throw new InvalidArgumentException("{$where} has a tags line with an entry that is not a tag slug.");
-            }
-            $slugs[] = trim($slug);
-        }
-        $slugs = array_values(array_unique($slugs));
-
-        if (count($slugs) > self::MAX_TAGS) {
-            throw new InvalidArgumentException("{$where} lists ".count($slugs).' tags, and a post takes at most '.self::MAX_TAGS.'.');
-        }
-
-        return $slugs;
-    }
-
-    private function resolve(string $path): ?string
-    {
-        foreach ([$path, base_path($path)] as $candidate) {
-            $real = realpath($candidate);
-            if ($real !== false && is_dir("{$real}/en") && is_dir("{$real}/id")) {
-                return $real;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Symfony YAML reads an unquoted `2026-04-07` as a Unix timestamp, and a
-     * quoted one as a string, so both are accepted.
-     */
-    private function date(mixed $value): ?Carbon
-    {
-        return match (true) {
-            is_int($value) => Carbon::createFromTimestampUTC($value),
-            $value instanceof DateTimeInterface => Carbon::instance($value),
-            is_string($value) && $value !== '' => Carbon::parse($value, 'UTC'),
-            default => null,
-        };
     }
 
     /**
