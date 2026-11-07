@@ -133,7 +133,16 @@ To load posts without publishing them, add `--draft`.
 php artisan posts:import some/path --draft
 ```
 
-A pair with no post yet is saved as a draft. Its date and author come from the `published` and `author` lines at the top of the English file, and stay empty or default when those lines are missing. A pair whose slug already belongs to a draft refreshes that draft's titles, descriptions and bodies in both languages, so whatever was edited in those six fields in the admin is replaced by the file. When the English file has a `published` line, the draft's date is set from it on every run, which makes the file the place to plan a date, and the draft can be published later without touching the date field. A date is read as UTC, so `published: 2026-11-17` means midnight UTC and `published: "2026-11-17 01:00"` means 01:00 UTC, which is 08:00 WIB. Without that line the draft keeps whatever date it has. The author, writer and tags set in the admin stay as they are, unless `--writer` is added. A slug that belongs to a published post stops the whole run before anything is written, so `--draft` alone never changes a live page.
+A pair with no post yet is saved as a draft. Its date and author come from the `published` and `author` lines at the top of the English file, and stay empty or default when those lines are missing. A pair whose slug already belongs to a draft refreshes that draft's titles, descriptions and bodies in both languages, so whatever was edited in those six fields in the admin is replaced by the file. When the English file has a `published` line, the draft's date is set from it on every run, which makes the file the place to plan a date, and the draft can be published later without touching the date field. A date is read as UTC, so `published: 2026-11-17` means midnight UTC and `published: "2026-11-17 01:00"` means 01:00 UTC, which is 08:00 WIB. Without that line the draft keeps whatever date it has. The author and writer set in the admin stay as they are, unless `--writer` is added. A slug that belongs to a published post stops the whole run before anything is written, so `--draft` alone never changes a live page.
+
+To plan a draft's tags in the same file, add a `tags` line to the English file with a list of tag slugs.
+
+```yaml
+published: "2026-11-17 01:00"
+tags: [mysql, stardust]
+```
+
+A slug is the end of the tag's page address, so `mysql` is `/blog/tag/mysql/`. A new draft gets those tags, and an existing draft is set to exactly them, so tags picked in the admin are replaced. A file with no `tags` line leaves the tags alone, and `tags: []` clears them. The Indonesian file is only read when the English one has no line. A repeated slug counts once, and more than six is refused, as the tag picker in the admin does. The import never creates a tag, so a slug that no tag has stops the whole run before anything is written, and the tag must be made under Tags first. A published post keeps its tags, `--include-live` included, and without `--draft` the line is not read.
 
 To refresh the text of a live post too, add `--include-live` next to `--draft`.
 

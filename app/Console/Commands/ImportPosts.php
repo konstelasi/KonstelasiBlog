@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\PostStatus;
 use App\Models\Post;
+use App\Models\Tag;
 use App\Models\User;
 use App\Rules\HouseStyle;
 use DateTimeInterface;
@@ -30,6 +31,9 @@ use Spatie\YamlFrontMatter\YamlFrontMatter;
 #[Description('Import paired English and Indonesian Markdown posts as published posts, or as drafts with --draft')]
 class ImportPosts extends Command
 {
+    /** The limit of the post form's tag picker, so a file cannot ask for more than the admin allows. */
+    private const MAX_TAGS = 6;
+
     public function handle(): int
     {
         foreach (['include-live', 'dry-run', 'writer'] as $flag) {
@@ -106,12 +110,15 @@ class ImportPosts extends Command
      * the date and author in its files. A pair whose slug is a draft has its
      * six text fields refreshed, and its date too when the English file has a
      * `published` line, so the file is where a date is planned. Without that
-     * line the date stays as the admin left it. The author, writer and tags
-     * set in the admin stay, except that `--writer` links a new draft, and a
-     * draft that has no writer yet, to that account and stores the account's
-     * name as its author text, as the admin's create page does. A slug that
-     * is published stops the whole run before anything is written, so no draft run changes a live
-     * page by accident. With `--include-live` a published post is refreshed
+     * line the date stays as the admin left it. The same holds for tags: a
+     * `tags` line lists tag slugs, a new draft gets them and an existing draft
+     * is set to exactly them, and without the line its tags stay. A slug that
+     * no tag has stops the whole run, because the import never creates a tag.
+     * The author and writer set in the admin stay, except that `--writer`
+     * links a new draft, and a draft that has no writer yet, to that account
+     * and stores the account's name as its author text, as the admin's create
+     * page does. A slug that is published stops the whole run before anything
+     * is written, so no draft run changes a live page by accident. With `--include-live` a published post is refreshed
      * the same way, keeps its status and date, and the observer starts the
      * site rebuild when its text really changed. With `--dry-run` the run
      * decides everything the same way, refusals included, and writes nothing.
@@ -147,6 +154,20 @@ class ImportPosts extends Command
             }
         }
 
+        // Every slug the files ask for must belong to a tag already, because
+        // creating one is a decision about the site's vocabulary that the admin
+        // keeps to the people who manage tags.
+        $wanted = array_values(array_unique(array_merge(...array_map(fn (array $pair) => $pair['tags'] ?? [], array_values($pairs)))));
+        $tagIds = $wanted === [] ? [] : Tag::whereIn('slug', $wanted)->pluck('id', 'slug')->all();
+        $unknown = array_diff($wanted, array_map('strval', array_keys($tagIds)));
+        if ($unknown) {
+            foreach ($unknown as $slug) {
+                $this->error("No tag has the slug {$slug}. Create it under Tags first. Nothing was imported.");
+            }
+
+            return self::FAILURE;
+        }
+
         $live = array_keys(array_filter($existing, fn (?Post $post) => $post?->status === PostStatus::Published));
         if ($live && ! $this->option('include-live')) {
             foreach ($live as $slug) {
@@ -160,9 +181,10 @@ class ImportPosts extends Command
             $this->warnAboutStyle($slug, $pair['text']);
 
             $post = $existing[$slug];
+            $wantedIds = $pair['tags'] === null ? null : array_map(fn (string $tag) => (int) $tagIds[$tag], $pair['tags']);
             if ($post === null) {
                 if (! $dryRun) {
-                    Post::create([
+                    $created = Post::create([
                         'slug' => $slug,
                         'status' => PostStatus::Draft,
                         ...$pair['text'],
@@ -170,6 +192,9 @@ class ImportPosts extends Command
                         'author' => $writer?->name ?? (filled($pair['author']) ? $pair['author'] : Post::DEFAULT_AUTHOR),
                         'user_id' => $writer?->getKey(),
                     ]);
+                    if ($wantedIds) {
+                        $created->tags()->sync($wantedIds);
+                    }
                 }
                 $this->info(($dryRun ? 'Would create ' : 'Created ')."{$slug} (draft)");
 
@@ -177,7 +202,8 @@ class ImportPosts extends Command
             }
 
             $post->fill($pair['text']);
-            // A live post keeps its date and writer, because both change what the public site shows.
+            $tagsChanged = false;
+            // A live post keeps its date, writer and tags, because each changes what the public site shows.
             if ($post->status === PostStatus::Draft) {
                 if ($pair['published_at'] !== null) {
                     $post->published_at = $pair['published_at'];
@@ -186,8 +212,18 @@ class ImportPosts extends Command
                     $post->user_id = $writer->getKey();
                     $post->author = $writer->name;
                 }
+                if ($wantedIds !== null) {
+                    $current = $post->tags()->pluck('tags.id')->map(fn ($id) => (int) $id)->all();
+                    sort($current);
+                    $target = array_unique($wantedIds);
+                    sort($target);
+                    $tagsChanged = $current !== $target;
+                }
             }
             $changed = array_keys($post->getDirty());
+            if ($tagsChanged) {
+                $changed[] = 'tags';
+            }
             if ($changed === []) {
                 $this->info("Unchanged {$slug}");
 
@@ -195,7 +231,13 @@ class ImportPosts extends Command
             }
 
             if (! $dryRun) {
-                $post->save();
+                // A save with nothing dirty still fires `saved`, so a tags-only change skips it.
+                if ($post->isDirty()) {
+                    $post->save();
+                }
+                if ($tagsChanged) {
+                    $post->tags()->sync($wantedIds);
+                }
             }
             $this->info(($dryRun ? 'Would refresh ' : 'Refreshed ').($post->status === PostStatus::Published ? 'live post ' : '')."{$slug} (".implode(', ', $changed).')');
         }
@@ -208,18 +250,22 @@ class ImportPosts extends Command
     }
 
     /**
-     * Reads one post's two files. English carries the date and the author,
-     * and Indonesian only fills them in when English leaves them out.
+     * Reads one post's two files. English carries the date, the author and
+     * the tags, and Indonesian only fills them in when English leaves them
+     * out. `tags` is null when neither file has the line, which is different
+     * from an empty list, because the first leaves a draft's tags alone and
+     * the second clears them.
      *
-     * @return array{text: array<string, string>, published_at: ?Carbon, author: mixed}
+     * @return array{text: array<string, string>, published_at: ?Carbon, author: mixed, tags: ?list<string>}
      *
-     * @throws InvalidArgumentException When a file has no title or no description.
+     * @throws InvalidArgumentException When a file has no title or no description, or a bad `tags` line.
      */
     private function readPair(string $root, string $file): array
     {
         $text = [];
         $publishedAt = null;
         $author = null;
+        $tags = null;
 
         foreach (Post::LANGUAGES as $lang) {
             $doc = YamlFrontMatter::parseFile("{$root}/{$lang}/{$file}");
@@ -236,9 +282,45 @@ class ImportPosts extends Command
 
             $publishedAt ??= $this->date($doc->matter('published'));
             $author ??= $doc->matter('author');
+            // The default import publishes and never reads tags, so a bad line only matters with --draft.
+            $tags ??= $this->option('draft') ? $this->tagSlugs($doc->matter('tags'), "{$lang}/{$file}") : null;
         }
 
-        return ['text' => $text, 'published_at' => $publishedAt, 'author' => $author];
+        return ['text' => $text, 'published_at' => $publishedAt, 'author' => $author, 'tags' => $tags];
+    }
+
+    /**
+     * A `tags` line is a YAML list of tag slugs, such as `tags: [mysql, stardust]`.
+     * A repeated slug counts once.
+     *
+     * @return ?list<string> Null when the file has no `tags` line.
+     *
+     * @throws InvalidArgumentException When the line is not a list of slugs, or lists more than the post form allows.
+     */
+    private function tagSlugs(mixed $value, string $where): ?array
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (! is_array($value) || ! array_is_list($value)) {
+            throw new InvalidArgumentException("{$where} has a tags line that is not a list of tag slugs.");
+        }
+
+        $slugs = [];
+        foreach ($value as $slug) {
+            if (! is_string($slug) || trim($slug) === '') {
+                throw new InvalidArgumentException("{$where} has a tags line with an entry that is not a tag slug.");
+            }
+            $slugs[] = trim($slug);
+        }
+        $slugs = array_values(array_unique($slugs));
+
+        if (count($slugs) > self::MAX_TAGS) {
+            throw new InvalidArgumentException("{$where} lists ".count($slugs).' tags, and a post takes at most '.self::MAX_TAGS.'.');
+        }
+
+        return $slugs;
     }
 
     private function resolve(string $path): ?string
