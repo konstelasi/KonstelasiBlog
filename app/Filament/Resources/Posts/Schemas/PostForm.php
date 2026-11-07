@@ -8,6 +8,7 @@ use App\Models\Post;
 use App\Models\Tag;
 use App\Rules\HouseStyle;
 use App\Support\Rbac;
+use Closure;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\MarkdownEditor;
 use Filament\Forms\Components\Select;
@@ -20,6 +21,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 class PostForm
@@ -52,8 +54,18 @@ class PostForm
                             ->label('Published')
                             ->seconds(false)
                             ->disabled(fn (): bool => ! self::mayPublish())
+                            // A date that has not come yet is for planning a draft.
+                            // The post observer refuses it on a published post too,
+                            // so this only gives the message at the field.
+                            ->rules([
+                                fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                                    if (self::publishing($get) && filled($value) && Carbon::parse($value, config('app.timezone'))->isFuture()) {
+                                        $fail(Post::FUTURE_DATE_MESSAGE);
+                                    }
+                                },
+                            ])
                             ->helperText(fn (): string => self::mayPublish()
-                                ? 'Leave it empty and it takes the moment you publish.'
+                                ? 'Leave it empty and it takes the moment you publish. A date still to come is for a draft.'
                                 : 'Set by an Editor or an Admin when they publish.'),
                         TextInput::make('slug')
                             ->required()

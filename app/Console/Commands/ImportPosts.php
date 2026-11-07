@@ -89,6 +89,12 @@ class ImportPosts extends Command
                 return self::FAILURE;
             }
 
+            if ($pair['published_at']?->isFuture()) {
+                $this->error("Refused {$slug}: its date has not come yet, and a post like that has to stay a draft. Import it with --draft, or fix the date.");
+
+                return self::FAILURE;
+            }
+
             $fields = [
                 'status' => PostStatus::Published,
                 ...$pair['text'],
