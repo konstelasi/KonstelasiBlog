@@ -186,6 +186,8 @@ A Writer saves drafts only. Their status and date controls are greyed out, and t
 
 To put a post on the site, an Editor or an Admin sets its status to Published and saves. The public pages are static files, so the site has to be rebuilt, and saving does that: this app asks GitHub to run the website's Deploy workflow, whose build fetches `/api/posts` and turns each post into a page in both languages. The change is live about two or three minutes later. Editing a draft starts nothing. Setting a live post back to Draft, or deleting it, asks first and names the two addresses that will stop working.
 
+A post dated in the future can't be published, because the site has no scheduling yet and the post would go live at once under a date still to come. Keep it a draft with its date set, and publish it when the day comes. The form says so at the date field, and the same rule holds for the import and for every other way of saving a post.
+
 That needs `GITHUB_DISPATCH_TOKEN` in the host's `.env`, a fine-grained GitHub token with only the Actions read and write permission on the website repository (`GITHUB_DISPATCH_REPO` in `.env.example`). Without it saving still works, and the site only changes when someone runs `bash deploy.sh` in the parent repo or runs the workflow by hand in the Actions tab. If the request fails, the failure is written to the log and the save is not affected. The "Saved" message says when a rebuild has been asked for and links to the workflow on GitHub. After a failed request every admin page shows a warning that the public blog may be out of date, until the next request goes through.
 
 ## The API

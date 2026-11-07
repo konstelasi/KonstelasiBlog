@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -112,6 +113,87 @@ class PublishingRulesTest extends TestCase
         $this->assertNotNull($post->published_at);
         $this->assertSame($writer->id, $post->user_id);
         $this->assertSame('Rani Putri', $post->byline());
+    }
+
+    public function test_the_form_refuses_to_publish_with_a_date_still_to_come(): void
+    {
+        Bus::fake();
+        $this->actingAs(User::factory()->editor()->create());
+
+        Livewire::test(CreatePost::class)
+            ->fillForm([
+                ...$this->complete(),
+                'status' => PostStatus::Published,
+                'published_at' => now()->addDays(3)->format('Y-m-d H:i:s'),
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['published_at']);
+
+        $this->assertSame(0, Post::count());
+        Bus::assertNothingDispatched();
+    }
+
+    public function test_the_form_accepts_a_date_still_to_come_on_a_draft(): void
+    {
+        $this->actingAs(User::factory()->editor()->create());
+        $at = now()->addDays(3)->startOfMinute();
+
+        Livewire::test(CreatePost::class)
+            ->fillForm([
+                ...$this->complete(),
+                'status' => PostStatus::Draft,
+                'published_at' => $at->format('Y-m-d H:i:s'),
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $post = Post::sole();
+        $this->assertSame(PostStatus::Draft, $post->status);
+        $this->assertTrue($post->published_at->equalTo($at));
+    }
+
+    public function test_a_published_post_with_a_date_still_to_come_cannot_be_saved(): void
+    {
+        $this->expectException(ValidationException::class);
+
+        Post::factory()->published(now()->addDay()->toDateTimeString())->create();
+    }
+
+    public function test_publishing_a_draft_that_carries_a_date_still_to_come_is_refused(): void
+    {
+        $post = Post::factory()->create(['published_at' => now()->addWeek()]);
+
+        try {
+            $post->update(['status' => PostStatus::Published]);
+            $this->fail('The save should have been refused.');
+        } catch (ValidationException $e) {
+            $this->assertSame([Post::FUTURE_DATE_MESSAGE], $e->errors()['published_at']);
+        }
+
+        $this->assertSame(PostStatus::Draft, $post->fresh()->status);
+    }
+
+    public function test_a_draft_may_hold_any_date_and_a_published_post_a_past_date_or_none(): void
+    {
+        $planned = Post::factory()->create(['published_at' => now()->addWeek()]);
+        $past = Post::factory()->published(now()->subDay()->toDateTimeString())->create();
+        $none = Post::factory()->create();
+        $none->update(['status' => PostStatus::Published]);
+
+        $this->assertSame(PostStatus::Draft, $planned->fresh()->status);
+        $this->assertSame(PostStatus::Published, $past->fresh()->status);
+        $this->assertSame(PostStatus::Published, $none->fresh()->status);
+        $this->assertNotNull($none->fresh()->published_at);
+    }
+
+    public function test_a_live_post_that_already_has_a_future_date_can_still_have_its_text_edited(): void
+    {
+        $post = Post::withoutEvents(fn () => Post::factory()->published(now()->addDay()->toDateTimeString())->create());
+        Bus::fake();
+
+        $post->update(['title_en' => 'A new title']);
+
+        $this->assertSame('A new title', $post->fresh()->title_en);
     }
 
     public function test_the_observer_refuses_a_save_by_a_writer_that_would_publish(): void

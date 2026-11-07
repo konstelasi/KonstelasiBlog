@@ -36,6 +36,13 @@ class Post extends Model
 
     public const DEFAULT_AUTHOR = 'Damar Maulana';
 
+    /**
+     * Why a post cannot be published with a date that has not come yet. The
+     * site has no scheduling, so such a post would go live at once under a
+     * date still to come. One sentence for a form message or an API error.
+     */
+    public const FUTURE_DATE_MESSAGE = 'A post dated in the future has to stay a draft. Use a date that has passed, or leave the date empty.';
+
     protected $attributes = [
         'status' => 'draft',
         'author' => self::DEFAULT_AUTHOR,

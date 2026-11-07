@@ -83,6 +83,28 @@ class ImportPostsTest extends TestCase
         $this->assertSame("Isi Body text.\n", $post->body_id);
     }
 
+    public function test_the_default_import_refuses_a_date_that_has_not_come_yet(): void
+    {
+        $dir = $this->stage(['later' => $this->pair('Later', english: ['published' => '"2999-01-01 00:00"'])]);
+
+        $code = Artisan::call('posts:import', ['path' => $dir]);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('Refused later: its date has not come yet', Artisan::output());
+        $this->assertSame(0, Post::count());
+    }
+
+    public function test_draft_keeps_a_date_that_has_not_come_yet_on_a_draft(): void
+    {
+        $dir = $this->stage(['later' => $this->pair('Later', english: ['published' => '"2999-01-01 00:00"'])]);
+
+        Artisan::call('posts:import', ['path' => $dir, '--draft' => true]);
+
+        $post = Post::where('slug', 'later')->sole();
+        $this->assertSame(PostStatus::Draft, $post->status);
+        $this->assertSame('2999-01-01 00:00:00', $post->published_at->toDateTimeString());
+    }
+
     public function test_the_default_import_publishes_an_existing_draft_and_replaces_its_text(): void
     {
         Post::factory()->create(['slug' => 'hello', 'title_en' => 'Old title']);
