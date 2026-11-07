@@ -339,6 +339,178 @@ class ImportPostsTest extends TestCase
         $this->assertSame(0, Post::count());
     }
 
+    /**
+     * The slugs of a post's tags, sorted, so a test can compare the set.
+     *
+     * @return list<string>
+     */
+    private function tagSlugsOf(Post $post): array
+    {
+        return $post->tags()->orderBy('slug')->pluck('slug')->all();
+    }
+
+    public function test_tags_line_gives_a_new_draft_its_tags_and_starts_no_rebuild(): void
+    {
+        Tag::factory()->create(['slug' => 'mysql']);
+        Tag::factory()->create(['slug' => 'stardust']);
+        Bus::fake();
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['tags' => '[mysql, stardust]'])]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('Created hello (draft)', $output);
+        $this->assertSame(['mysql', 'stardust'], $this->tagSlugsOf(Post::where('slug', 'hello')->sole()));
+        Bus::assertNotDispatchedAfterResponse(RebuildSite::class);
+    }
+
+    public function test_tags_line_sets_a_draft_to_exactly_the_listed_tags(): void
+    {
+        $old = Tag::factory()->create(['slug' => 'old']);
+        Tag::factory()->create(['slug' => 'mysql']);
+        $draft = Post::factory()->create(['slug' => 'hello']);
+        $draft->tags()->attach($old);
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['tags' => '[mysql]'])]);
+
+        [, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertMatchesRegularExpression('/Refreshed hello \([^)]*\btags\b[^)]*\)/', $output);
+        $this->assertSame(['mysql'], $this->tagSlugsOf($draft));
+    }
+
+    public function test_an_empty_tags_list_clears_the_tags_of_a_draft(): void
+    {
+        $draft = Post::factory()->create(['slug' => 'hello']);
+        $draft->tags()->attach(Tag::factory()->create(['slug' => 'old']));
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['tags' => '[]'])]);
+
+        [, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertMatchesRegularExpression('/Refreshed hello \([^)]*\btags\b[^)]*\)/', $output);
+        $this->assertSame([], $this->tagSlugsOf($draft));
+    }
+
+    public function test_a_file_with_no_tags_line_leaves_the_tags_of_a_draft_alone(): void
+    {
+        $draft = Post::factory()->create(['slug' => 'hello']);
+        $draft->tags()->attach(Tag::factory()->create(['slug' => 'old']));
+        $dir = $this->stage(['hello' => $this->pair('Hello')]);
+
+        [, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertDoesNotMatchRegularExpression('/\btags\b/', $output);
+        $this->assertSame(['old'], $this->tagSlugsOf($draft));
+    }
+
+    public function test_the_same_tags_in_another_order_are_unchanged(): void
+    {
+        Tag::factory()->create(['slug' => 'mysql']);
+        Tag::factory()->create(['slug' => 'stardust']);
+        $this->importFrom($this->stage(['hello' => $this->pair('Hello', english: ['tags' => '[mysql, stardust]'])]), ['--draft' => true]);
+
+        [, $output] = $this->importFrom(
+            $this->stage(['hello' => $this->pair('Hello', english: ['tags' => '[stardust, mysql, mysql]'])]),
+            ['--draft' => true],
+        );
+
+        $this->assertStringContainsString('Unchanged hello', $output);
+    }
+
+    public function test_the_indonesian_file_supplies_the_tags_when_english_has_no_line(): void
+    {
+        Tag::factory()->create(['slug' => 'mysql']);
+        $posts = $this->pair('Hello');
+        $posts['id']['tags'] = '[mysql]';
+        $dir = $this->stage(['hello' => $posts]);
+
+        $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertSame(['mysql'], $this->tagSlugsOf(Post::where('slug', 'hello')->sole()));
+    }
+
+    public function test_an_unknown_tag_slug_refuses_the_whole_run_and_writes_nothing(): void
+    {
+        Tag::factory()->create(['slug' => 'mysql']);
+        $draft = Post::factory()->create(['slug' => 'kept', 'title_en' => 'Kept title']);
+        $dir = $this->stage([
+            'kept' => $this->pair('Changed'),
+            'hello' => $this->pair('Hello', english: ['tags' => '[mysql, nope]']),
+        ]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('No tag has the slug nope.', $output);
+        $this->assertStringNotContainsString('slug mysql', $output);
+        $this->assertFalse(Post::where('slug', 'hello')->exists());
+        $this->assertSame('Kept title', $draft->refresh()->title_en);
+    }
+
+    public function test_more_tags_than_a_post_takes_refuses_the_run(): void
+    {
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['tags' => '[a, b, c, d, e, f, g]'])]);
+
+        [$code, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('en/hello.md lists 7 tags, and a post takes at most 6.', $output);
+        $this->assertSame(0, Post::count());
+    }
+
+    public function test_a_tags_line_that_is_not_a_list_of_slugs_refuses_the_run(): void
+    {
+        foreach (['mysql', '[2026]', '{a: b}'] as $line) {
+            $dir = $this->stage(['hello' => $this->pair('Hello', english: ['tags' => $line])]);
+
+            [$code, $output] = $this->importFrom($dir, ['--draft' => true]);
+
+            $this->assertSame(1, $code, $line);
+            $this->assertStringContainsString('en/hello.md has a tags line', $output, $line);
+            $this->assertSame(0, Post::count(), $line);
+        }
+    }
+
+    public function test_include_live_leaves_the_tags_of_a_published_post_alone(): void
+    {
+        Tag::factory()->create(['slug' => 'mysql']);
+        $live = Post::factory()->published('2026-01-02 08:00:00')->create(['slug' => 'live-one']);
+        $live->tags()->attach(Tag::factory()->create(['slug' => 'old']));
+        $dir = $this->stage(['live-one' => $this->pair('Fixed', english: ['tags' => '[mysql]'])]);
+        Bus::fake();
+
+        $this->importFrom($dir, ['--draft' => true, '--include-live' => true]);
+
+        $this->assertSame('Fixed', $live->refresh()->title_en);
+        $this->assertSame(['old'], $this->tagSlugsOf($live));
+    }
+
+    public function test_dry_run_names_the_tags_it_would_set_and_writes_nothing(): void
+    {
+        Tag::factory()->create(['slug' => 'mysql']);
+        $draft = Post::factory()->create(['slug' => 'hello']);
+        $draft->tags()->attach(Tag::factory()->create(['slug' => 'old']));
+        $dir = $this->stage([
+            'hello' => $this->pair('Hello', english: ['tags' => '[mysql]']),
+            'fresh' => $this->pair('Fresh', english: ['tags' => '[mysql]']),
+        ]);
+
+        [, $output] = $this->importFrom($dir, ['--draft' => true, '--dry-run' => true]);
+
+        $this->assertMatchesRegularExpression('/Would refresh hello \([^)]*\btags\b[^)]*\)/', $output);
+        $this->assertStringContainsString('Would create fresh (draft)', $output);
+        $this->assertSame(['old'], $this->tagSlugsOf($draft));
+        $this->assertFalse(Post::where('slug', 'fresh')->exists());
+    }
+
+    public function test_the_default_import_does_not_read_tags(): void
+    {
+        $dir = $this->stage(['hello' => $this->pair('Hello', english: ['tags' => 'mysql'])]);
+
+        $this->artisan('posts:import', ['path' => $dir])->assertSuccessful();
+
+        $this->assertSame([], $this->tagSlugsOf(Post::where('slug', 'hello')->sole()));
+    }
+
     public function test_draft_refuses_the_whole_run_when_a_slug_is_published(): void
     {
         $live = Post::factory()->published()->create(['slug' => 'live-one', 'title_en' => 'Live title']);
