@@ -226,6 +226,16 @@ php artisan posts:push some/path --publish
 
 Every post is checked first, and nothing is written unless all of them pass. Without `--publish` the status is left alone, so a new post is a draft and an existing post keeps its status. The `published` line becomes the post's date, the `tags` line sets its tags, and the `author` line is not sent, because the writer is the account behind the token. The token needs the Publish ability for `--publish` and for any post that is already live.
 
+A post can only use tags that exist, so a tag it names that is missing has to be created first. Put a `tags.yml` next to `en/` and `id/` that defines the tags you may need, each with its two names.
+
+```yaml
+software-development:
+  en: Software development
+  id: Pengembangan software
+```
+
+When a post names a tag that the blog does not have and `tags.yml` defines it, `posts:push` creates the tag before it writes the posts, which needs a token with the Manage tags ability. A slug with no definition stops the run, so a typo never makes a tag, and a definition that no post uses is ignored. A tag that was created stays even if a later post is refused, which does no harm, because a tag nobody uses shows nowhere.
+
 Underneath it is one endpoint, `PUT /api/v1/posts/{slug}`, sent with `Authorization: Bearer <token>`. It creates the post or updates it, and repeating a request changes nothing the second time. `GET /api/v1/posts/{slug}` reads a post of any status. A body has any of `status` (`draft` or `published`), `published_at`, `tags` (a list of tag slugs), and `en` and `id`, each with `title`, `description` and `body`. A field left out keeps its stored value, a field the API does not know is refused, and the text is stored exactly as sent. Add `?dry_run=1` to run every check and write nothing.
 
 ```json

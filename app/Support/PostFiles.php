@@ -7,6 +7,8 @@ use DateTimeInterface;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 use Spatie\YamlFrontMatter\YamlFrontMatter;
+use Symfony\Component\Yaml\Exception\ParseException;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Reads a folder of posts kept as Markdown, one file per language with the
@@ -18,6 +20,9 @@ final class PostFiles
 {
     /** The limit of the post form's tag picker, so a file cannot ask for more than the admin allows. */
     public const MAX_TAGS = 6;
+
+    /** What the admin and the API accept as a slug, for a post or a tag. */
+    public const SLUG = '/^[a-z0-9]+(?:-[a-z0-9]+)*$/';
 
     /**
      * The folder that holds `en/` and `id/`, tried as given and then relative
@@ -33,6 +38,57 @@ final class PostFiles
         }
 
         return null;
+    }
+
+    /**
+     * The tags a folder defines, from an optional `tags.yml` beside `en/` and
+     * `id/`. Each slug maps to its two names, such as
+     * `software-development: {en: Software development, id: Pengembangan software}`.
+     * A tag is only created from a definition, so a typo in a post's `tags`
+     * line still fails and never makes a tag.
+     *
+     * @return array<string, array{en: string, id: string}>
+     *
+     * @throws InvalidArgumentException When the file is not valid YAML, or an entry is not a slug with both names.
+     */
+    public static function tagDefinitions(string $root): array
+    {
+        $file = "{$root}/tags.yml";
+        if (! is_file($file)) {
+            return [];
+        }
+
+        try {
+            $data = Yaml::parse((string) file_get_contents($file));
+        } catch (ParseException $e) {
+            throw new InvalidArgumentException('tags.yml is not valid YAML. '.$e->getMessage());
+        }
+
+        if ($data === null) {
+            return [];
+        }
+        if (! is_array($data) || array_is_list($data)) {
+            throw new InvalidArgumentException('tags.yml must map each tag slug to its English and Indonesian names.');
+        }
+
+        $definitions = [];
+        foreach ($data as $slug => $names) {
+            $slug = (string) $slug;
+            if (preg_match(self::SLUG, $slug) !== 1) {
+                throw new InvalidArgumentException("tags.yml has \"{$slug}\", which is not a slug. Use lowercase letters, digits and single hyphens.");
+            }
+            if (! is_array($names) || array_keys($names) !== ['en', 'id'] && array_keys($names) !== ['id', 'en']) {
+                throw new InvalidArgumentException("tags.yml gives \"{$slug}\" something other than an English and an Indonesian name.");
+            }
+            foreach (['en', 'id'] as $lang) {
+                if (! is_string($names[$lang]) || trim($names[$lang]) === '') {
+                    throw new InvalidArgumentException("tags.yml has no {$lang} name for \"{$slug}\".");
+                }
+            }
+            $definitions[$slug] = ['en' => trim($names['en']), 'id' => trim($names['id'])];
+        }
+
+        return $definitions;
     }
 
     /**

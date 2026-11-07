@@ -23,6 +23,12 @@ use InvalidArgumentException;
  * all of them pass, so a bad file late in the folder does not leave half of
  * it pushed. Without `--publish` the status is left alone, so a new post is a
  * draft and an existing post keeps whatever status it has.
+ *
+ * A post can only use tags that exist. A tag a post names that is missing is
+ * created first, but only when a `tags.yml` in the folder defines it, and the
+ * token has the `tags:manage` ability. A slug with no definition stops the
+ * run, so a typo never makes a tag. A tag created before a later post is
+ * refused stays, which does no harm, since a tag nobody uses shows nowhere.
  */
 #[Signature('posts:push
     {path : Folder that holds the en/ and id/ folders}
@@ -31,9 +37,6 @@ use InvalidArgumentException;
 #[Description('Send paired English and Indonesian Markdown posts to the blog through its API')]
 class PushPosts extends Command
 {
-    /** What the admin and the API accept as a slug. The file name becomes the slug and goes into the URL. */
-    private const SLUG = '/^[a-z0-9]+(?:-[a-z0-9]+)*$/';
-
     public function handle(): int
     {
         $token = (string) config('services.blog_api.token');
@@ -68,7 +71,7 @@ class PushPosts extends Command
 
         // A file name that is not a slug could carry a `?` or a `/` into the
         // URL and change what a request does, so it stops the run before any.
-        $badNames = array_filter($files['en'], fn (string $file): bool => ! preg_match(self::SLUG, basename($file, '.md')) || strlen($file) > 255);
+        $badNames = array_filter($files['en'], fn (string $file): bool => ! preg_match(PostFiles::SLUG, basename($file, '.md')) || strlen($file) > 255);
         if ($badNames) {
             foreach ($badNames as $file) {
                 $this->error("{$file} is not a usable slug. The file name must be lowercase letters, digits and single hyphens, such as my-post.md.");
@@ -82,6 +85,7 @@ class PushPosts extends Command
             foreach ($files['en'] as $file) {
                 $payloads[basename($file, '.md')] = $this->payload(PostFiles::readPair($root, $file));
             }
+            $definitions = PostFiles::tagDefinitions($root);
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());
 
@@ -92,14 +96,30 @@ class PushPosts extends Command
         $dryRun = (bool) $this->option('dry-run');
 
         try {
-            // The check comes first, and a refusal stops the run before any write.
+            // Tags come first, since a post can only use tags that exist.
+            $pending = [];
+            $failure = $this->prepareTags($client, $payloads, $definitions, $dryRun, $pending);
+            if ($failure !== null) {
+                return $failure;
+            }
+
+            // The check comes next, and a refusal stops the run before any post is written.
             $refused = false;
             foreach ($payloads as $slug => $payload) {
-                $response = $this->send($client, $slug, $payload, dry: true);
+                $response = $this->send($client, "posts/{$slug}", $payload, dry: true);
                 if ($response->status() === 401) {
                     return $this->tokenRefused();
                 }
                 if ($response->failed()) {
+                    // In a dry run the tags that would be created do not exist
+                    // yet, so a post that names one cannot pass its check. Every
+                    // other slug was checked against the list already.
+                    if ($dryRun && $pending !== [] && $response->json('code') === 'unknown_tag') {
+                        $this->info("Would push {$slug} once its new tags exist");
+
+                        continue;
+                    }
+
                     $refused = true;
                     $this->reportRefusal($slug, $response);
 
@@ -123,7 +143,7 @@ class PushPosts extends Command
             }
 
             foreach ($payloads as $slug => $payload) {
-                $response = $this->send($client, $slug, $payload, dry: false);
+                $response = $this->send($client, "posts/{$slug}", $payload, dry: false);
                 if ($response->status() === 401) {
                     return $this->tokenRefused();
                 }
@@ -178,11 +198,95 @@ class PushPosts extends Command
     }
 
     /**
+     * Makes sure every tag the posts name exists, creating the ones the
+     * folder defines. It checks the creations as a dry run first and then, on
+     * a real run, makes them. `$pending` gets the slugs that are, or in a dry
+     * run would be, created.
+     *
+     * @param  array<string, array<string, mixed>>  $payloads  By post slug.
+     * @param  array<string, array{en: string, id: string}>  $definitions
+     * @param  list<string>  $pending
+     * @return ?int An exit code when the run has to stop, null when it can go on.
+     *
+     * @throws ConnectionException
+     */
+    private function prepareTags(PendingRequest $client, array $payloads, array $definitions, bool $dryRun, array &$pending): ?int
+    {
+        $wanted = [];
+        foreach ($payloads as $payload) {
+            array_push($wanted, ...($payload['tags'] ?? []));
+        }
+        $wanted = array_values(array_unique($wanted));
+        if ($wanted === []) {
+            return null;
+        }
+
+        $listed = (clone $client)->get($this->baseUrl().'/api/v1/tags');
+        if ($listed->status() === 401) {
+            return $this->tokenRefused();
+        }
+        if ($listed->failed()) {
+            $this->error('Could not read the tags from the blog ('.$listed->status().').');
+
+            return self::FAILURE;
+        }
+
+        $existing = array_map('strval', array_column((array) $listed->json('data'), 'slug'));
+        $missing = array_values(array_diff($wanted, $existing));
+        $undefined = array_values(array_diff($missing, array_keys($definitions)));
+        if ($undefined !== []) {
+            foreach ($undefined as $slug) {
+                $this->error("No tag has the slug {$slug}, and tags.yml does not define it. Add it to tags.yml next to en/ and id/, or create it under Tags in the admin.");
+            }
+            $this->error('Nothing was pushed.');
+
+            return self::FAILURE;
+        }
+
+        $refused = false;
+        foreach ($missing as $slug) {
+            $response = $this->send($client, "tags/{$slug}", $definitions[$slug], dry: true);
+            if ($response->status() === 401) {
+                return $this->tokenRefused();
+            }
+            if ($response->failed()) {
+                $refused = true;
+                $this->reportRefusal("tag {$slug}", $response);
+            } elseif ($dryRun) {
+                $this->info("Would create tag {$slug}");
+            }
+        }
+        if ($refused) {
+            $this->error('Nothing was pushed.');
+
+            return self::FAILURE;
+        }
+
+        if (! $dryRun) {
+            foreach ($missing as $slug) {
+                $response = $this->send($client, "tags/{$slug}", $definitions[$slug], dry: false);
+                if ($response->failed()) {
+                    $this->reportRefusal("tag {$slug}", $response);
+
+                    return self::FAILURE;
+                }
+                $this->info("Created tag {$slug}");
+            }
+        }
+
+        $pending = $missing;
+
+        return null;
+    }
+
+    /**
+     * One PUT to the API. `$path` is `posts/<slug>` or `tags/<slug>`.
+     *
      * @param  array<string, mixed>  $payload
      *
      * @throws ConnectionException
      */
-    private function send(PendingRequest $client, string $slug, array $payload, bool $dry): Response
+    private function send(PendingRequest $client, string $path, array $payload, bool $dry): Response
     {
         // A request object keeps what is set on it, so each call starts from a copy.
         $request = clone $client;
@@ -190,7 +294,9 @@ class PushPosts extends Command
             $request->withQueryParameters(['dry_run' => 1]);
         }
 
-        return $request->put($this->baseUrl().'/api/v1/posts/'.rawurlencode($slug), $payload);
+        [$resource, $slug] = explode('/', $path, 2);
+
+        return $request->put($this->baseUrl()."/api/v1/{$resource}/".rawurlencode($slug), $payload);
     }
 
     private function baseUrl(): string
