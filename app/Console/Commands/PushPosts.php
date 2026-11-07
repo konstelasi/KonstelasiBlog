@@ -31,6 +31,9 @@ use InvalidArgumentException;
 #[Description('Send paired English and Indonesian Markdown posts to the blog through its API')]
 class PushPosts extends Command
 {
+    /** What the admin and the API accept as a slug. The file name becomes the slug and goes into the URL. */
+    private const SLUG = '/^[a-z0-9]+(?:-[a-z0-9]+)*$/';
+
     public function handle(): int
     {
         $token = (string) config('services.blog_api.token');
@@ -61,6 +64,17 @@ class PushPosts extends Command
             $this->warn('No posts to push.');
 
             return self::SUCCESS;
+        }
+
+        // A file name that is not a slug could carry a `?` or a `/` into the
+        // URL and change what a request does, so it stops the run before any.
+        $badNames = array_filter($files['en'], fn (string $file): bool => ! preg_match(self::SLUG, basename($file, '.md')) || strlen($file) > 255);
+        if ($badNames) {
+            foreach ($badNames as $file) {
+                $this->error("{$file} is not a usable slug. The file name must be lowercase letters, digits and single hyphens, such as my-post.md.");
+            }
+
+            return self::FAILURE;
         }
 
         $payloads = [];
@@ -170,7 +184,13 @@ class PushPosts extends Command
      */
     private function send(PendingRequest $client, string $slug, array $payload, bool $dry): Response
     {
-        return $client->put($this->baseUrl()."/api/v1/posts/{$slug}".($dry ? '?dry_run=1' : ''), $payload);
+        // A request object keeps what is set on it, so each call starts from a copy.
+        $request = clone $client;
+        if ($dry) {
+            $request->withQueryParameters(['dry_run' => 1]);
+        }
+
+        return $request->put($this->baseUrl().'/api/v1/posts/'.rawurlencode($slug), $payload);
     }
 
     private function baseUrl(): string

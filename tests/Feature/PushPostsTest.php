@@ -249,6 +249,20 @@ class PushPostsTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_a_file_name_that_is_not_a_slug_stops_the_run_before_any_request(): void
+    {
+        Http::fake();
+
+        foreach (['Bad_Name', 'with.dot', 'two--hyphens', '-leading', 'a%3Fdry_run%3D1'] as $name) {
+            [$code, $output] = $this->push($this->stage([$name => $this->pair('Hello')]));
+
+            $this->assertSame(1, $code, $name);
+            $this->assertStringContainsString("{$name}.md is not a usable slug.", $output, $name);
+        }
+
+        Http::assertNothingSent();
+    }
+
     public function test_a_file_with_no_twin_stops_the_run(): void
     {
         Http::fake();
