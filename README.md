@@ -70,7 +70,9 @@ The accounts that existed when roles were added became Admins, so nobody was loc
 
 ## The dashboard
 
-The page you land on after signing in shows the state of the whole blog. A ruled line gives the live posts, the drafts, the words that are live in both languages and when something was last published. Under it, a list of drafts that need someone. Editors and Admins see every complete draft waiting for review, the one that has waited longest first, and every draft that misses a language. A Writer sees only their own drafts that miss a language. Next to it, a small chart shows how many posts went live in each of the last 12 months.
+The page you land on after signing in is a desk. The wide column is your own work. It starts with the draft you edited last, set large, with a line about what is still missing from it and a link to carry on writing, and the rest of your drafts follow in a short list. Under them are your live posts, newest first, each with its date and links to its English and Indonesian pages on the site. A New post button sits at the top, and an account with no posts yet is invited to start one.
+
+The narrow column beside it, which drops below the desk on a phone, is about the whole blog. It gives the live posts, the drafts, the words that are live in both languages and when something was last published, then a small chart of how many posts went live in each of the last 12 months. Editors and Admins also see the drafts other people have left for them, the complete ones that have waited longest and the ones that still miss a language. Their own drafts are on their desk, so they are not repeated there.
 
 Editors and Admins also see when the public site was last asked to rebuild, with a link to the builds on GitHub. That time is when GitHub accepted the request, not when the build finished, so open the link to see the result. A request that fails has its own warning at the top of every page. Admins also see how many accounts use two-factor sign-in and which ones do not, since only the owner of an account can turn it on.
 

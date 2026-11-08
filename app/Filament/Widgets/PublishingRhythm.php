@@ -11,7 +11,7 @@ class PublishingRhythm extends Widget
 {
     protected static bool $isLazy = false;
 
-    protected static ?int $sort = 3;
+    protected static ?int $sort = 6;
 
     protected string $view = 'filament.widgets.publishing-rhythm';
 

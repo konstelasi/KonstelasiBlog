@@ -6,6 +6,7 @@ use App\Enums\PostStatus;
 use App\Models\Post;
 use App\Models\User;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -74,6 +75,40 @@ class DashboardOverview
         return $months;
     }
 
+    /** @return Builder<Post> */
+    private function own(): Builder
+    {
+        return Post::query()->where('user_id', $this->user->getKey());
+    }
+
+    /**
+     * The account's own drafts, the one edited last first, each with the
+     * languages that are not complete yet. The first is where to pick up.
+     *
+     * @return Collection<int, array{post: Post, missing: list<string>}>
+     */
+    public function yourDrafts(): Collection
+    {
+        return $this->own()->where('status', PostStatus::Draft)->latest('updated_at')->limit(self::LIMIT)->get()
+            ->map(fn (Post $post): array => ['post' => $post, 'missing' => $post->missingLanguages()])
+            ->values();
+    }
+
+    /**
+     * The account's own live posts, newest first.
+     *
+     * @return Collection<int, Post>
+     */
+    public function yourLivePosts(): Collection
+    {
+        return $this->own()->published()->orderByDesc('published_at')->limit(self::LIMIT)->get();
+    }
+
+    public function yourLiveCount(): int
+    {
+        return $this->own()->published()->count();
+    }
+
     /** Whether this account may publish, which is what the lists below are for. */
     public function isPublisher(): bool
     {
@@ -81,9 +116,9 @@ class DashboardOverview
     }
 
     /**
-     * Drafts with both languages complete, the one waiting longest first.
-     * Unlike the profile page's list this includes the viewer's own drafts,
-     * since a publisher's own draft waits for a decision too.
+     * Other people's drafts, and imported ones, with both languages complete,
+     * the one waiting longest first. The viewer's own drafts are on their desk
+     * already, so they are left out here.
      *
      * @return Collection<int, Post>
      */
@@ -93,31 +128,39 @@ class DashboardOverview
             return collect();
         }
 
-        return Post::query()->where('status', PostStatus::Draft)->oldest('updated_at')->get()
+        return $this->othersDrafts()->get()
             ->filter(fn (Post $post): bool => $post->missingLanguages() === [])
             ->take(self::LIMIT)
             ->values();
     }
 
     /**
-     * Drafts that miss a language, with the languages that are not complete
-     * yet. A publisher sees everyone's, anyone else only their own.
+     * Other people's drafts that miss a language, with the languages that are
+     * not complete yet. Only a publisher has a use for the list, since a
+     * Writer's own drafts are on their desk.
      *
      * @return Collection<int, array{post: Post, missing: list<string>}>
      */
     public function halfDone(): Collection
     {
-        $query = Post::query()->with('writer')->where('status', PostStatus::Draft)->oldest('updated_at');
-
         if (! $this->isPublisher()) {
-            $query->where('user_id', $this->user->getKey());
+            return collect();
         }
 
-        return $query->get()
+        return $this->othersDrafts()->with('writer')->get()
             ->map(fn (Post $post): array => ['post' => $post, 'missing' => $post->missingLanguages()])
             ->filter(fn (array $row): bool => $row['missing'] !== [])
             ->take(self::LIMIT)
             ->values();
+    }
+
+    /** @return Builder<Post> */
+    private function othersDrafts(): Builder
+    {
+        return Post::query()
+            ->where('status', PostStatus::Draft)
+            ->where(fn (Builder $query) => $query->whereNull('user_id')->orWhere('user_id', '!=', $this->user->getKey()))
+            ->oldest('updated_at');
     }
 
     /** Whether this account manages accounts, which is what the two-factor list is for. */

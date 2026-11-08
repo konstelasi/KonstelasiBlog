@@ -3,28 +3,32 @@
 namespace App\Filament\Widgets;
 
 use App\Support\DashboardOverview;
+use App\Support\Rbac;
 use Filament\Widgets\Widget;
 
 /**
- * Drafts that need someone. A publisher sees everyone's, a writer only their
- * own. It draws nothing when there is nothing to do.
+ * Other people's drafts that wait for someone who can publish. It is for
+ * publishers only, since a Writer's own drafts, with what is left on each,
+ * are on their desk. It sits in the side column.
  */
 class NeedsDecision extends Widget
 {
     protected static bool $isLazy = false;
 
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 3;
 
     protected string $view = 'filament.widgets.needs-decision';
 
-    protected int|string|array $columnSpan = ['default' => 1, 'lg' => 2];
+    public static function canView(): bool
+    {
+        return (bool) auth()->user()?->can(Rbac::POST_PUBLISH);
+    }
 
     protected function getViewData(): array
     {
         $overview = new DashboardOverview(auth()->user());
 
         return [
-            'publisher' => $overview->isPublisher(),
             'ready' => $overview->readyToPublish(),
             'halfDone' => $overview->halfDone(),
         ];
