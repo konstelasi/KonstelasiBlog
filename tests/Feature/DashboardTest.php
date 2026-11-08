@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\RebuildSite;
 use App\Models\Post;
 use App\Models\User;
 use App\Support\DashboardOverview;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class DashboardTest extends TestCase
@@ -54,32 +56,80 @@ class DashboardTest extends TestCase
         $this->assertSame(4, array_sum($months));
     }
 
-    public function test_only_publishers_see_ready_drafts_and_they_include_their_own_oldest_first(): void
+    public function test_only_publishers_see_ready_drafts_and_never_their_own_oldest_first(): void
     {
         $editor = User::factory()->editor()->create();
         $other = User::factory()->writer()->create();
         $newer = Post::factory()->create(['user_id' => $other->id, 'updated_at' => now()->subDay()]);
-        $older = Post::factory()->create(['user_id' => $editor->id, 'updated_at' => now()->subDays(9)]);
+        // An imported draft has no writer, so it is nobody's desk but waits for a decision.
+        $imported = Post::factory()->create(['user_id' => null, 'updated_at' => now()->subDays(5)]);
+        Post::factory()->create(['user_id' => $editor->id, 'updated_at' => now()->subDays(9)]);
         Post::factory()->create(['body_id' => '']);
         Post::factory()->published()->create();
 
-        $this->assertSame([$older->id, $newer->id], (new DashboardOverview($editor))->readyToPublish()->pluck('id')->all());
+        $this->assertSame([$imported->id, $newer->id], (new DashboardOverview($editor))->readyToPublish()->pluck('id')->all());
         $this->assertCount(0, (new DashboardOverview($other))->readyToPublish());
     }
 
-    public function test_a_publisher_sees_every_half_done_draft_and_a_writer_only_their_own(): void
+    public function test_a_publisher_sees_other_peoples_half_done_drafts_and_a_writer_sees_none(): void
     {
         $writer = User::factory()->writer()->create();
+        $editor = User::factory()->editor()->create();
         $mine = Post::factory()->create(['user_id' => $writer->id, 'body_id' => '']);
         $theirs = Post::factory()->create(['user_id' => User::factory()->writer()->create()->id, 'title_en' => '', 'description_en' => '']);
+        $editors = Post::factory()->create(['user_id' => $editor->id, 'body_id' => '']);
+        $imported = Post::factory()->create(['user_id' => null, 'body_en' => '']);
         Post::factory()->create();
 
-        $forEditor = (new DashboardOverview(User::factory()->editor()->create()))->halfDone();
-        $forWriter = (new DashboardOverview($writer))->halfDone();
+        $forEditor = (new DashboardOverview($editor))->halfDone();
 
-        $this->assertEqualsCanonicalizing([$mine->id, $theirs->id], $forEditor->pluck('post.id')->all());
-        $this->assertSame([['Indonesian']], $forWriter->pluck('missing')->all());
-        $this->assertSame($mine->id, $forWriter->first()['post']->id);
+        // The editor's own half-done draft is on their desk, not in this list.
+        $this->assertEqualsCanonicalizing([$mine->id, $theirs->id, $imported->id], $forEditor->pluck('post.id')->all());
+        $this->assertNotContains($editors->id, $forEditor->pluck('post.id')->all());
+        $this->assertCount(0, (new DashboardOverview($writer))->halfDone());
+    }
+
+    public function test_your_drafts_are_only_your_own_and_the_one_edited_last_comes_first(): void
+    {
+        $writer = User::factory()->writer()->create();
+        $older = Post::factory()->create(['user_id' => $writer->id, 'body_id' => '', 'updated_at' => now()->subDays(3)]);
+        $newest = Post::factory()->create(['user_id' => $writer->id, 'updated_at' => now()->subHour()]);
+        Post::factory()->create(['user_id' => User::factory()->writer()->create()->id]);
+        Post::factory()->create(['user_id' => null]);
+        Post::factory()->published()->create(['user_id' => $writer->id]);
+
+        $drafts = (new DashboardOverview($writer))->yourDrafts();
+
+        $this->assertSame([$newest->id, $older->id], $drafts->pluck('post.id')->all());
+        $this->assertSame([[], ['Indonesian']], $drafts->pluck('missing')->all());
+    }
+
+    public function test_your_live_posts_are_only_your_own_newest_first_with_a_count(): void
+    {
+        $writer = User::factory()->writer()->create();
+        $other = User::factory()->writer()->create();
+        $first = Post::factory()->published('2026-08-01')->create(['user_id' => $writer->id]);
+        $second = Post::factory()->published('2026-10-01')->create(['user_id' => $writer->id]);
+        Post::factory()->published('2026-09-01')->create(['user_id' => $other->id]);
+        Post::factory()->create(['user_id' => $writer->id]);
+
+        $overview = new DashboardOverview($writer);
+
+        $this->assertSame([$second->id, $first->id], $overview->yourLivePosts()->pluck('id')->all());
+        $this->assertSame(2, $overview->yourLiveCount());
+    }
+
+    public function test_a_long_list_is_cut_at_eight_but_the_live_count_stays_whole(): void
+    {
+        $writer = User::factory()->writer()->create();
+        Post::factory()->count(10)->published()->create(['user_id' => $writer->id]);
+        Post::factory()->count(10)->create(['user_id' => $writer->id]);
+
+        $overview = new DashboardOverview($writer);
+
+        $this->assertCount(8, $overview->yourLivePosts());
+        $this->assertCount(8, $overview->yourDrafts());
+        $this->assertSame(10, $overview->yourLiveCount());
     }
 
     public function test_the_two_factor_list_is_for_admins_and_skips_accounts_that_cannot_sign_in(): void
@@ -127,7 +177,7 @@ class DashboardTest extends TestCase
     public function test_the_site_line_says_when_the_rebuild_was_last_requested(): void
     {
         config(['services.github.token' => 'test-token']);
-        \Illuminate\Support\Facades\Cache::forever(\App\Jobs\RebuildSite::REQUESTED_KEY, now()->subMinutes(7)->timestamp);
+        Cache::forever(RebuildSite::REQUESTED_KEY, now()->subMinutes(7)->timestamp);
         $this->actingAs(User::factory()->editor()->create());
 
         $this->get('/admin')->assertOk()
