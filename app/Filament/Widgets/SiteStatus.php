@@ -19,8 +19,6 @@ class SiteStatus extends Widget
 
     protected string $view = 'filament.widgets.site-status';
 
-    protected int|string|array $columnSpan = ['default' => 1, 'lg' => 2];
-
     public static function canView(): bool
     {
         return (bool) auth()->user()?->can(Rbac::POST_PUBLISH);

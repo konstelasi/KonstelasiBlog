@@ -193,4 +193,118 @@ class DashboardTest extends TestCase
             ->assertSee('Nothing published in the last 12 months.')
             ->assertSee('Nothing yet');
     }
+
+    public function test_the_page_is_a_desk_with_a_new_post_button(): void
+    {
+        foreach (['writer', 'editor', 'admin'] as $role) {
+            $this->actingAs(User::factory()->{$role}()->create());
+
+            $this->get('/admin')->assertOk()
+                ->assertSee('Your desk')
+                ->assertSee('New post')
+                ->assertSee('/admin/posts/create', false)
+                ->assertSee('desk-main', false)
+                ->assertSee('desk-side', false);
+        }
+    }
+
+    public function test_the_desk_leads_with_the_draft_edited_last_and_lists_the_rest(): void
+    {
+        $writer = User::factory()->writer()->create();
+        Post::factory()->create(['user_id' => $writer->id, 'title_en' => 'The draft to pick up', 'body_id' => '', 'updated_at' => now()->subHour()]);
+        Post::factory()->create(['user_id' => $writer->id, 'title_en' => 'An older draft', 'body_en' => '', 'updated_at' => now()->subDays(4)]);
+        Post::factory()->create(['title_en' => 'Somebody else draft']);
+        $this->actingAs($writer);
+
+        $this->get('/admin')->assertOk()
+            ->assertSeeInOrder(['Your drafts', 'The draft to pick up', 'Indonesian is not complete yet.', 'Continue writing', 'An older draft'])
+            ->assertSee('needs English')
+            ->assertDontSee('Somebody else draft');
+    }
+
+    public function test_a_complete_lead_draft_says_who_can_publish_it(): void
+    {
+        $writer = User::factory()->writer()->create();
+        Post::factory()->create(['user_id' => $writer->id]);
+        $this->actingAs($writer);
+        $this->get('/admin')->assertOk()->assertSee('An Editor or an Admin can publish it.');
+
+        $editor = User::factory()->editor()->create();
+        Post::factory()->create(['user_id' => $editor->id]);
+        $this->actingAs($editor);
+        $this->get('/admin')->assertOk()->assertSee('You can publish it.');
+    }
+
+    public function test_a_new_account_is_invited_to_start_a_post(): void
+    {
+        $this->actingAs(User::factory()->writer()->create());
+
+        $this->get('/admin')->assertOk()
+            ->assertSee('Nothing in progress.')
+            ->assertSee('Start a post')
+            ->assertSee('None of your posts is live yet.');
+    }
+
+    public function test_the_live_posts_are_the_accounts_own_with_dates_and_links_to_the_site(): void
+    {
+        config(['services.site.url' => 'https://example.test']);
+        $writer = User::factory()->writer()->create();
+        Post::factory()->published('2026-10-01 12:00:00')->create(['user_id' => $writer->id, 'slug' => 'my-live-post', 'title_en' => 'My live post']);
+        Post::factory()->published()->create(['slug' => 'not-mine', 'title_en' => 'Not mine']);
+        $this->actingAs($writer);
+
+        $this->get('/admin')->assertOk()
+            ->assertSee('Your live posts')
+            ->assertSee('My live post')
+            ->assertSee('1 Oct 2026')
+            ->assertSee('https://example.test/blog/my-live-post/', false)
+            ->assertSee('https://example.test/id/blog/my-live-post/', false)
+            ->assertDontSee('Not mine');
+    }
+
+    public function test_older_live_posts_beyond_the_list_are_counted_with_a_link(): void
+    {
+        $writer = User::factory()->writer()->create();
+        Post::factory()->count(10)->published()->create(['user_id' => $writer->id]);
+        $this->actingAs($writer);
+
+        $this->get('/admin')->assertOk()
+            ->assertSee('2 older posts are in')
+            ->assertSee('the Posts list');
+    }
+
+    public function test_the_side_column_has_the_blog_figures_for_everyone(): void
+    {
+        Post::factory()->published()->create(['body_en' => 'one two', 'body_id' => 'tiga']);
+        Post::factory()->create();
+        $this->actingAs(User::factory()->writer()->create());
+
+        $this->get('/admin')->assertOk()
+            ->assertSeeInOrder(['The blog', 'Live post', 'Draft', 'Words live, both languages', '3', 'Last published']);
+    }
+
+    public function test_only_a_publisher_has_the_waiting_list_and_it_leaves_out_their_own_drafts(): void
+    {
+        $editor = User::factory()->editor()->create();
+        Post::factory()->create(['user_id' => $editor->id, 'title_en' => 'My own complete draft']);
+        Post::factory()->create(['user_id' => User::factory()->writer()->create()->id, 'title_en' => 'A writer draft']);
+
+        $this->actingAs($editor);
+        $this->get('/admin')->assertOk()
+            ->assertSee('Ready to publish')
+            ->assertSee('A writer draft')
+            // It is on their desk, so the waiting list does not repeat it.
+            ->assertSee('My own complete draft');
+        $this->assertSame(1, substr_count($this->get('/admin')->getContent(), 'My own complete draft'));
+
+        $this->actingAs(User::factory()->writer()->create());
+        $this->get('/admin')->assertOk()->assertDontSee('Ready to publish')->assertDontSee('Waiting for you');
+    }
+
+    public function test_an_empty_waiting_list_says_so_for_a_publisher(): void
+    {
+        $this->actingAs(User::factory()->editor()->create());
+
+        $this->get('/admin')->assertOk()->assertSee('No one else has a draft waiting for a decision.');
+    }
 }
