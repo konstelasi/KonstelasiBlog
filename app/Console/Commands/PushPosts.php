@@ -16,8 +16,8 @@ use InvalidArgumentException;
 /**
  * Sends a folder of Markdown posts, one pair of files per post, to the
  * authoring API of the blog. It reads the same folders `posts:import` reads,
- * but it needs no access to the host: only a token made under API tokens in
- * the admin, in `BLOG_API_TOKEN`, and the address in `BLOG_API_URL`.
+ * but it needs no access to the host: only a token made under API tokens on your profile
+ * page, in `BLOG_API_TOKEN`, and the address in `BLOG_API_URL`.
  *
  * Every post is checked first as a dry run, and nothing is written unless
  * all of them pass, so a bad file late in the folder does not leave half of
@@ -41,7 +41,7 @@ class PushPosts extends Command
     {
         $token = (string) config('services.blog_api.token');
         if ($token === '') {
-            $this->error('BLOG_API_TOKEN is not set. Make a token under API tokens in the admin and put it in .env.');
+            $this->error('BLOG_API_TOKEN is not set. Make a token under API tokens on your profile page and put it in .env.');
 
             return self::FAILURE;
         }
@@ -306,7 +306,7 @@ class PushPosts extends Command
 
     private function tokenRefused(): int
     {
-        $this->error('The blog refused the token. It may have expired or been revoked, so make a new one under API tokens in the admin.');
+        $this->error('The blog refused the token. It may have expired or been revoked, so make a new one under API tokens on your profile page.');
 
         return self::FAILURE;
     }

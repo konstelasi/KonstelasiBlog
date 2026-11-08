@@ -359,7 +359,8 @@ html.dark {
 }
 
 .profile-block > h2,
-.profile-sessions-head h2 {
+.profile-sessions-head h2,
+.profile-tokens-head h2 {
     font-size: 1.0625rem;
     font-weight: 600;
     letter-spacing: -0.02em;
@@ -610,8 +611,39 @@ html.dark {
     margin-top: 1rem;
 }
 
-.profile-sessions-head .profile-lead {
+.profile-sessions-head .profile-lead,
+.profile-tokens-head .profile-lead {
     margin-bottom: 0;
+}
+
+/* The tokens list sits under its heading row. Revoke is a plain button that
+   reads as a link, in the danger colour because it cannot be undone. */
+.profile-tokens {
+    margin-top: 1rem;
+}
+
+.profile-tokens .profile-table {
+    min-width: 40rem;
+}
+
+.profile-token-act {
+    text-align: end;
+}
+
+.profile-act.is-danger,
+.profile-expired {
+    color: var(--color-danger-600, #b42318);
+}
+
+html.dark .profile-act.is-danger,
+html.dark .profile-expired {
+    color: var(--color-danger-400, #f97066);
+}
+
+.profile-expired {
+    margin-inline-start: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 500;
 }
 
 .profile-here {

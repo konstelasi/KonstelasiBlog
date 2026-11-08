@@ -2,9 +2,12 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Profile\ApiTokenForm;
+use App\Models\ApiToken;
 use App\Models\Post;
 use App\Support\BrowserSessions;
 use App\Support\ProfileOverview;
+use App\Support\Rbac;
 use Filament\Actions\Action;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Auth\Pages\EditProfile;
@@ -25,6 +28,7 @@ use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
@@ -46,6 +50,7 @@ class Profile extends EditProfile
         'overview' => ['label' => 'Overview', 'hint' => 'Your work'],
         'account' => ['label' => 'Account', 'hint' => 'Name, email, password'],
         'security' => ['label' => 'Security', 'hint' => 'Sign-in and browsers'],
+        'tokens' => ['label' => 'API tokens', 'hint' => 'Scripts and the push command'],
     ];
 
     #[Url(as: 'section')]
@@ -61,9 +66,30 @@ class Profile extends EditProfile
         return Width::SevenExtraLarge;
     }
 
+    /**
+     * The sections this account may open. Tokens are for the accounts that
+     * hold `token.manage`, so everyone else neither sees the entry nor gets
+     * the section by typing `?section=tokens`.
+     *
+     * @return array<string, array{label: string, hint: string}>
+     */
+    private function sections(): array
+    {
+        return array_filter(
+            self::SECTIONS,
+            fn (string $key): bool => $key !== 'tokens' || $this->mayManageTokens(),
+            ARRAY_FILTER_USE_KEY,
+        );
+    }
+
     private function currentSection(): string
     {
-        return array_key_exists($this->section, self::SECTIONS) ? $this->section : 'overview';
+        return array_key_exists($this->section, $this->sections()) ? $this->section : 'overview';
+    }
+
+    private function mayManageTokens(): bool
+    {
+        return $this->getUser()->can(Rbac::TOKEN_MANAGE);
     }
 
     public function content(Schema $schema): Schema
@@ -77,7 +103,7 @@ class Profile extends EditProfile
                     ->viewData(['user' => $user, 'role' => $role]),
                 Flex::make([
                     View::make('filament.profile.nav')
-                        ->viewData(['items' => self::SECTIONS, 'current' => $this->currentSection()])
+                        ->viewData(['items' => $this->sections(), 'current' => $this->currentSection()])
                         ->grow(false),
                     Group::make($this->sectionComponents()),
                 ])->from('lg'),
@@ -90,6 +116,7 @@ class Profile extends EditProfile
         return match ($this->currentSection()) {
             'account' => [$this->getFormContentComponent()],
             'security' => $this->securityComponents(),
+            'tokens' => $this->tokenComponents(),
             default => [
                 View::make('filament.profile.overview')
                     ->viewData(fn (): array => ['overview' => new ProfileOverview($this->getUser())]),
@@ -140,6 +167,85 @@ class Profile extends EditProfile
             ->extraAttributes(['class' => 'profile-sessions']);
 
         return $components;
+    }
+
+    /**
+     * The account's own tokens. Another Admin's tokens are not listed here,
+     * since deleting an account already deletes its tokens.
+     *
+     * @return array<Component>
+     */
+    private function tokenComponents(): array
+    {
+        return [
+            Flex::make([
+                View::make('filament.profile.tokens-heading'),
+                Actions::make([$this->createTokenAction()])
+                    ->key('tokenActions')
+                    ->grow(false),
+            ])->verticalAlignment(VerticalAlignment::End),
+            View::make('filament.profile.tokens')
+                ->viewData(fn (): array => ['tokens' => $this->getUser()->tokens()->latest()->get()]),
+        ];
+    }
+
+    /**
+     * The token belongs to the account that creates it and can do no more
+     * than that account. Sanctum stores only a hash, and the plain text comes
+     * back once, in the notice below.
+     */
+    private function createTokenAction(): Action
+    {
+        return Action::make('createToken')
+            ->label('Create token')
+            ->icon(Heroicon::OutlinedPlus)
+            ->authorize(fn (): bool => $this->mayManageTokens())
+            ->modalHeading('Create an API token')
+            ->modalSubmitActionLabel('Create token')
+            ->schema(ApiTokenForm::fields())
+            ->action(function (array $data): void {
+                $created = $this->getUser()->createToken(
+                    $data['name'],
+                    $data['abilities'],
+                    now()->addDays((int) $data['expires_in']),
+                );
+
+                Notification::make()
+                    ->success()
+                    ->title('Token created')
+                    ->body(new HtmlString(
+                        'Copy it now. It is not shown again.<br><code style="user-select: all; word-break: break-all;">'
+                        .e($created->plainTextToken).'</code>',
+                    ))
+                    ->persistent()
+                    ->send();
+            });
+    }
+
+    /**
+     * Mounted from the list with the token's id. It looks the token up among
+     * this account's own, so an id that belongs to someone else finds nothing.
+     */
+    public function revokeTokenAction(): Action
+    {
+        return Action::make('revokeToken')
+            ->authorize(fn (): bool => $this->mayManageTokens())
+            ->requiresConfirmation()
+            ->modalHeading('Revoke this token?')
+            ->modalDescription('Whatever uses it stops working at once. This cannot be undone.')
+            ->modalSubmitActionLabel('Revoke')
+            ->color('danger')
+            ->action(function (array $arguments): void {
+                $token = $this->getUser()->tokens()->find($arguments['token'] ?? null);
+
+                if (! $token instanceof ApiToken || ! $this->getUser()->can('delete', $token)) {
+                    return;
+                }
+
+                $token->delete();
+
+                Notification::make()->success()->title('Token revoked')->send();
+            });
     }
 
     private function signOutOthersAction(): Action

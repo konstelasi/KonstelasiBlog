@@ -214,7 +214,7 @@ That needs `GITHUB_DISPATCH_TOKEN` in the host's `.env`, a fine-grained GitHub t
 
 Posts can be created and updated without the admin, by a script that holds a token. A token stands for the account that made it, so it can do what that account can and no more, and its abilities narrow it further. Write drafts lets it create and update drafts, with their planned date and tags. Publish lets it also publish, take a live post back to draft and edit live posts, and it only works for an account that may publish. Manage tags lets it create tags and nothing else, so a token that writes drafts cannot change which tags a post may use.
 
-An Admin makes one under API tokens in the menu, with a name, the abilities and a lifetime of 30 days, 90 days or a year. The token is shown once and only a hash of it is kept, so a lost token is revoked and replaced. A token starts with `kblog_` after its number, so a secret scanner can recognise one that was committed by mistake. Deleting an account deletes its tokens.
+An Admin makes one on their profile page, in the API tokens section, with a name, the abilities and a lifetime of 30 days, 90 days or a year. The section lists only that account's own tokens. The token is shown once and only a hash of it is kept, so a lost token is revoked and replaced. A token starts with `kblog_` after its number, so a secret scanner can recognise one that was committed by mistake. Deleting an account deletes its tokens.
 
 The easiest way to use one is `posts:push`, which reads the same `en/` and `id/` folders as the import. Put the token in `.env` as `BLOG_API_TOKEN` (`BLOG_API_URL` defaults to the live blog).
 
