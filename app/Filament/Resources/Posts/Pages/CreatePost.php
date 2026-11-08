@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Posts\Pages;
 
 use App\Enums\PostStatus;
+use App\Filament\Resources\Posts\Pages\Concerns\PreviewsPost;
 use App\Filament\Resources\Posts\Pages\Concerns\ReportsRebuild;
 use App\Filament\Resources\Posts\PostResource;
 use App\Models\Post;
@@ -11,9 +12,17 @@ use Filament\Resources\Pages\CreateRecord;
 
 class CreatePost extends CreateRecord
 {
+    use PreviewsPost;
     use ReportsRebuild;
 
     protected static string $resource = PostResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            $this->previewAction(),
+        ];
+    }
 
     /**
      * The writer is whoever is signed in, never what the browser sent. The

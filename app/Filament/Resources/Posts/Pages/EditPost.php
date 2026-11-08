@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Posts\Pages;
 
 use App\Enums\PostStatus;
+use App\Filament\Resources\Posts\Pages\Concerns\PreviewsPost;
 use App\Filament\Resources\Posts\Pages\Concerns\ReportsRebuild;
 use App\Filament\Resources\Posts\PostResource;
 use App\Models\Post;
@@ -13,6 +14,7 @@ use Filament\Resources\Pages\EditRecord;
 
 class EditPost extends EditRecord
 {
+    use PreviewsPost;
     use ReportsRebuild;
 
     protected static string $resource = PostResource::class;
@@ -27,6 +29,7 @@ class EditPost extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            $this->previewAction(),
             DeleteAction::make()
                 ->modalDescription(fn (Post $record): string => $record->status === PostStatus::Published
                     ? $record->offlineWarning()
