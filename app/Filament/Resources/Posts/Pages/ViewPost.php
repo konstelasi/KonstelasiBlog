@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Posts\Pages;
 
+use App\Filament\Resources\Posts\Pages\Concerns\PreviewsPost;
 use App\Filament\Resources\Posts\PostResource;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
@@ -12,11 +13,14 @@ use Filament\Resources\Pages\ViewRecord;
  */
 class ViewPost extends ViewRecord
 {
+    use PreviewsPost;
+
     protected static string $resource = PostResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
+            $this->previewAction(),
             EditAction::make(),
         ];
     }
