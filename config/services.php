@@ -42,8 +42,9 @@ return [
         'url' => env('SITE_URL', 'https://konstelasi.co.id'),
     ],
 
-    // Where `posts:push` sends posts, and the token it signs in with. Made
-    // under API tokens in the admin. Only a machine that pushes needs them.
+    // Where `posts:push` sends posts, and the token it signs in with. The
+    // token is made under API tokens on the profile page. Only a machine that
+    // pushes needs these.
     'blog_api' => [
         'url' => env('BLOG_API_URL', 'https://blog.konstelasi.co.id'),
         'token' => env('BLOG_API_TOKEN'),

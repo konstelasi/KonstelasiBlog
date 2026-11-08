@@ -14,7 +14,7 @@ Route::get('/posts', [PostController::class, 'index']);
 // A post route needs `posts:write`, and `PostUpsert` asks for `posts:publish`
 // when a write touches a live post. A tag route needs `tags:manage`, kept
 // apart on purpose, so a token that writes drafts cannot change the tags a
-// post may use. Tokens are made in the admin under API tokens.
+// post may use. Tokens are made on the profile page, under API tokens.
 Route::prefix('v1')
     ->where(['slug' => '[a-z0-9]+(?:-[a-z0-9]+)*'])
     ->middleware(['auth:sanctum', 'throttle:posts-write'])
